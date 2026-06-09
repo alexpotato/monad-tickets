@@ -1,0 +1,10 @@
+# Foundry build artifacts
+contracts/out/
+contracts/cache/
+
+# Local deploy/broadcast logs (anvil runs, tx receipts)
+contracts/broadcast/
+
+# Secrets
+.env
+.env.*
