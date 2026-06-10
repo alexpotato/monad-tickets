@@ -150,7 +150,29 @@ contract TicketCollection is ERC721, AccessControl, ITicketCollection {
         SeatListing storage s = seatListing[keccak256(bytes(label))];
         if (!s.active || s.tokenId != 0) revert SeatUnavailable();
         if (msg.value != s.price) revert WrongPayment();
+        tokenId = _mintSeat(s, label);
+        _payOrganizer(msg.value);
+    }
 
+    /// @notice Buy several listed seats in one transaction. `msg.value` must
+    ///         equal the sum of the seat prices; all-or-nothing.
+    function buySeats(string[] calldata labels) external payable returns (uint256[] memory tokenIds) {
+        tokenIds = new uint256[](labels.length);
+        uint256 total;
+        for (uint256 i = 0; i < labels.length; i++) {
+            SeatListing storage s = seatListing[keccak256(bytes(labels[i]))];
+            if (!s.active || s.tokenId != 0) revert SeatUnavailable();
+            total += s.price;
+            tokenIds[i] = _mintSeat(s, labels[i]);
+        }
+        if (msg.value != total) revert WrongPayment();
+        _payOrganizer(total);
+    }
+
+    function _mintSeat(SeatListing storage s, string calldata label)
+        internal
+        returns (uint256 tokenId)
+    {
         tokenId = _nextId++;
         _tickets[tokenId] = Ticket({
             tier: s.tier,
@@ -162,12 +184,13 @@ contract TicketCollection is ERC721, AccessControl, ITicketCollection {
         s.tokenId = tokenId;
         seatOf[tokenId] = label;
         _safeMint(msg.sender, tokenId);
+        emit SeatSold(label, tokenId, msg.sender, s.price);
+        emit Minted(tokenId, msg.sender, s.tier, s.price);
+    }
 
-        (bool ok,) = payable(organizer).call{value: msg.value}("");
+    function _payOrganizer(uint256 amount) internal {
+        (bool ok,) = payable(organizer).call{value: amount}("");
         require(ok, "organizer xfer failed");
-
-        emit SeatSold(label, tokenId, msg.sender, msg.value);
-        emit Minted(tokenId, msg.sender, s.tier, msg.value);
     }
 
     function seatCount() external view returns (uint256) {
@@ -265,8 +288,7 @@ contract TicketCollection is ERC721, AccessControl, ITicketCollection {
         onlyRole(GATE_ROLE)
     {
         address holder = ownerOf(tokenId);
-        Ticket storage t = _tickets[tokenId];
-        if (t.usedAt != 0) revert TicketUsed();
+        if (_tickets[tokenId].usedAt != 0) revert TicketUsed();
 
         bytes32 codeHash = keccak256(bytes(code));
         if (!_codeIsActive(codeHash)) revert BadGateCode();
@@ -278,12 +300,54 @@ contract TicketCollection is ERC721, AccessControl, ITicketCollection {
         require(digest.recover(holderSig) == holder, "bad holder signature");
         checkInNonce[holder] = nonce + 1;
 
-        // Hand the ticket back to the event wallet — the canonical on-chain
-        // proof of attendance. _inCheckIn scopes the transfer privilege.
+        _checkInOne(holder, tokenId);
+    }
+
+    /// @notice Check in several tickets held by the same wallet with ONE
+    ///         signature: the holder types the venue code once and signs over
+    ///         the whole token list. All-or-nothing.
+    function checkInBatch(uint256[] calldata tokenIds, string calldata code, bytes calldata holderSig)
+        external
+        onlyRole(GATE_ROLE)
+    {
+        require(tokenIds.length > 0, "empty batch");
+        address holder = ownerOf(tokenIds[0]);
+
+        bytes32 codeHash = keccak256(bytes(code));
+        if (!_codeIsActive(codeHash)) revert BadGateCode();
+
+        uint256 nonce = checkInNonce[holder];
+        bytes32 digest = MessageHashUtils.toEthSignedMessageHash(
+            keccak256(
+                abi.encode(
+                    address(this),
+                    block.chainid,
+                    keccak256(abi.encodePacked(tokenIds)),
+                    nonce,
+                    codeHash
+                )
+            )
+        );
+        require(digest.recover(holderSig) == holder, "bad holder signature");
+        checkInNonce[holder] = nonce + 1;
+
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            require(ownerOf(tokenIds[i]) == holder, "mixed holders");
+            if (_tickets[tokenIds[i]].usedAt != 0) revert TicketUsed();
+            _checkInOne(holder, tokenIds[i]);
+        }
+    }
+
+    /// @dev Shared check-in effect: hand the ticket back to the event wallet —
+    ///      the canonical on-chain proof of attendance — then mint the
+    ///      souvenir stub and credit loyalty. _inCheckIn scopes the transfer
+    ///      privilege in _update.
+    function _checkInOne(address holder, uint256 tokenId) internal {
         _inCheckIn = true;
         _safeTransfer(holder, organizer, tokenId, "");
         _inCheckIn = false;
 
+        Ticket storage t = _tickets[tokenId];
         t.usedAt = uint64(block.timestamp);
         stub.mint(holder, address(this), tokenId);
         loyalty.recordAttendance(holder, tokenId, attendPoints);

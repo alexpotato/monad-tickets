@@ -89,6 +89,29 @@ contract Base is Test {
         return abi.encodePacked(r, s, v);
     }
 
+    /// @dev Batch variant: one signature over the whole token list.
+    function _signCheckInBatch(
+        TicketCollection c,
+        uint256 pk,
+        address holder,
+        uint256[] memory tokenIds,
+        string memory code
+    ) internal view returns (bytes memory) {
+        uint256 nonce = c.checkInNonce(holder);
+        bytes32 inner = keccak256(
+            abi.encode(
+                address(c),
+                block.chainid,
+                keccak256(abi.encodePacked(tokenIds)),
+                nonce,
+                keccak256(bytes(code))
+            )
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", inner));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, digest);
+        return abi.encodePacked(r, s, v);
+    }
+
     /// @dev Full happy-path check-in: set code, sign as holder, submit as gate.
     function _checkIn(TicketCollection c, address holder, uint256 pk, uint256 tokenId) internal {
         _setGateCode(c, VENUE_CODE);

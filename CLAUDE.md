@@ -17,7 +17,7 @@ on-chain, to distinguish genuine attendees from scalpers and reward the former.
 Code lives in `contracts/` (Foundry, Solidity 0.8.28 + `via_ir`, OpenZeppelin
 v5.1.0). Six contracts: `LoyaltyRegistry`, `AttendanceStub`,
 `TicketCollection`, `ResaleMarketplace`, `TicketAuction`, `EventFactory`.
-33 passing tests. A demo web app lives in `web/` (Vite + React + viem):
+39 passing tests. A demo web app lives in `web/` (Vite + React + viem):
 organizer dashboard, attendee phone simulator, and venue gate — see
 `web/README.md` for the run book.
 

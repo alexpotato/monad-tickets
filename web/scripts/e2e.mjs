@@ -1,4 +1,5 @@
-// End-to-end exercise of the demo flow using the same calls the UI makes.
+// End-to-end exercise of the demo flow using the same calls the UI makes,
+// including the batch paths (multi-seat buy, one-signature batch check-in).
 // Prereqs: anvil running + contracts/script/Demo.s.sol broadcast.
 //   node scripts/e2e.mjs
 import {
@@ -9,6 +10,7 @@ import {
   keccak256,
   toBytes,
   encodeAbiParameters,
+  encodePacked,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
@@ -33,10 +35,10 @@ const collectionAbi = parseAbi([
   "function allSeats() view returns (string[])",
   "function seatListing(bytes32) view returns (uint16, uint256, bool, uint256)",
   "function ownerOf(uint256) view returns (address)",
-  "function buySeat(string) payable returns (uint256)",
+  "function buySeats(string[]) payable returns (uint256[])",
   "function checkInNonce(address) view returns (uint256)",
   "function setGateCode(bytes32)",
-  "function checkIn(uint256, string, bytes)",
+  "function checkInBatch(uint256[], string, bytes)",
 ]);
 const loyaltyAbi = parseAbi(["function scoreOf(address) view returns (int256)"]);
 const stubAbi = parseAbi(["function balanceOf(address) view returns (uint256)"]);
@@ -60,27 +62,45 @@ const [organizer, loyaltyAddr, stubAddr, seats] = await Promise.all([
 ]);
 console.log(`collection ${collection}, ${seats.length} seats`);
 
-// 1. Ava buys the first available seat (same call as the UI's Buy button).
 const ava = wallet(AVA_PK);
-let target = null;
+const gate = wallet(GATE_PK);
+
+const scoreBefore = await pub.readContract({
+  address: loyaltyAddr, abi: loyaltyAbi, functionName: "scoreOf", args: [ava.account.address],
+});
+const stubsBefore = await pub.readContract({
+  address: stubAddr, abi: stubAbi, functionName: "balanceOf", args: [ava.account.address],
+});
+
+// 1. Ava buys TWO available seats in one transaction (the UI's cart flow).
+const picks = [];
+let total = 0n;
 for (const label of seats) {
   const [, price, , tokenId] = await read("seatListing", [keccak256(toBytes(label))]);
-  if (tokenId === 0n) { target = { label, price }; break; }
+  if (tokenId === 0n) {
+    picks.push(label);
+    total += price;
+    if (picks.length === 2) break;
+  }
 }
-assert(target, "found an available seat");
+assert(picks.length === 2, `found two available seats (${picks.join(", ")})`);
 
 let hash = await ava.client.writeContract({
-  address: collection, abi: collectionAbi, functionName: "buySeat",
-  args: [target.label], value: target.price,
+  address: collection, abi: collectionAbi, functionName: "buySeats",
+  args: [picks], value: total,
 });
 await pub.waitForTransactionReceipt({ hash });
-const [, , , tokenId] = await read("seatListing", [keccak256(toBytes(target.label))]);
-assert(tokenId !== 0n, `seat ${target.label} sold → token #${tokenId}`);
-assert((await read("ownerOf", [tokenId])) === ava.account.address, "Ava owns the ticket");
+
+const ids = [];
+for (const label of picks) {
+  const [, , , tokenId] = await read("seatListing", [keccak256(toBytes(label))]);
+  assert(tokenId !== 0n, `seat ${label} sold → token #${tokenId}`);
+  assert((await read("ownerOf", [tokenId])) === ava.account.address, `Ava owns token #${tokenId}`);
+  ids.push(tokenId);
+}
 
 // 2. Gate rotates the venue code (hash on-chain, plaintext on screens).
-const gate = wallet(GATE_PK);
-const CODE = "MOSH-4242";
+const CODE = "ENCORE-7777";
 hash = await gate.client.writeContract({
   address: collection, abi: collectionAbi, functionName: "setGateCode",
   args: [keccak256(toBytes(CODE))],
@@ -88,54 +108,54 @@ hash = await gate.client.writeContract({
 await pub.waitForTransactionReceipt({ hash });
 console.log(`  ok: venue code committed (${CODE})`);
 
-// 3. Ava types the code and signs — exactly what the phone sim does.
+// 3. Ava types the code ONCE and signs ONCE over both tickets.
+const batchDigest = (tokenIds, nonce, code) =>
+  keccak256(
+    encodeAbiParameters(
+      [{ type: "address" }, { type: "uint256" }, { type: "bytes32" }, { type: "uint256" }, { type: "bytes32" }],
+      [collection, BigInt(foundry.id), keccak256(encodePacked(["uint256[]"], [tokenIds])), nonce, keccak256(toBytes(code))],
+    ),
+  );
+
 const nonce = await read("checkInNonce", [ava.account.address]);
-const digest = keccak256(
-  encodeAbiParameters(
-    [{ type: "address" }, { type: "uint256" }, { type: "uint256" }, { type: "uint256" }, { type: "bytes32" }],
-    [collection, BigInt(foundry.id), tokenId, nonce, keccak256(toBytes(CODE))],
-  ),
-);
-const sig = await ava.account.signMessage({ message: { raw: digest } });
+const sig = await ava.account.signMessage({ message: { raw: batchDigest(ids, nonce, CODE) } });
 
 // 3a. A wrong typed code must be rejected at the gate.
-const badDigest = keccak256(
-  encodeAbiParameters(
-    [{ type: "address" }, { type: "uint256" }, { type: "uint256" }, { type: "uint256" }, { type: "bytes32" }],
-    [collection, BigInt(foundry.id), tokenId, nonce, keccak256(toBytes("WRONG-0000"))],
-  ),
-);
-const badSig = await ava.account.signMessage({ message: { raw: badDigest } });
+const badSig = await ava.account.signMessage({
+  message: { raw: batchDigest(ids, nonce, "WRONG-0000") },
+});
 let rejected = false;
 try {
   await gate.client.writeContract({
-    address: collection, abi: collectionAbi, functionName: "checkIn",
-    args: [tokenId, "WRONG-0000", badSig],
+    address: collection, abi: collectionAbi, functionName: "checkInBatch",
+    args: [ids, "WRONG-0000", badSig],
   });
 } catch {
   rejected = true;
 }
 assert(rejected, "wrong venue code rejected");
 
-// 4. Gate submits the valid check-in and pays gas (free for Ava).
+// 4. Gate submits ONE batch check-in for both tickets and pays the gas.
 const avaBalanceBefore = await pub.getBalance({ address: ava.account.address });
 hash = await gate.client.writeContract({
-  address: collection, abi: collectionAbi, functionName: "checkIn",
-  args: [tokenId, CODE, sig],
+  address: collection, abi: collectionAbi, functionName: "checkInBatch",
+  args: [ids, CODE, sig],
 });
 await pub.waitForTransactionReceipt({ hash });
 
-// 5. Outcomes: ticket returned, stub minted, loyalty credited, Ava paid nothing.
-assert((await read("ownerOf", [tokenId])) === organizer, "ticket returned to event wallet");
-const stubs = await pub.readContract({
+// 5. Outcomes: both tickets returned, two stubs, double loyalty, zero gas.
+for (const id of ids) {
+  assert((await read("ownerOf", [id])) === organizer, `ticket #${id} returned to event wallet`);
+}
+const stubsAfter = await pub.readContract({
   address: stubAddr, abi: stubAbi, functionName: "balanceOf", args: [ava.account.address],
 });
-assert(stubs >= 1n, `souvenir stub minted (balance ${stubs})`);
-const score = await pub.readContract({
+assert(stubsAfter - stubsBefore === 2n, `two souvenir stubs minted (+${stubsAfter - stubsBefore})`);
+const scoreAfter = await pub.readContract({
   address: loyaltyAddr, abi: loyaltyAbi, functionName: "scoreOf", args: [ava.account.address],
 });
-assert(score >= 10n, `loyalty credited (score ${score})`);
+assert(scoreAfter - scoreBefore === 20n, `loyalty credited twice (+${scoreAfter - scoreBefore})`);
 const avaBalanceAfter = await pub.getBalance({ address: ava.account.address });
 assert(avaBalanceAfter === avaBalanceBefore, "check-in cost Ava zero gas");
 
-console.log("\nE2E PASSED — buy → code → sign → gate check-in → stub + loyalty");
+console.log("\nE2E PASSED — cart buy (1 tx) → code once → sign once → batch gate check-in");

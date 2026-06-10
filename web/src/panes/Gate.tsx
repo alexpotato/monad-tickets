@@ -117,28 +117,29 @@ export function Gate({ state }: { state: EventState }) {
   useEffect(() => {
     if (!isLeader) return;
     return onScan(async (p: ScanPayload) => {
-      addLog(true, `Scanned pass: seat ${p.seat} (token #${p.tokenId}) from ${p.holder.slice(0, 8)}…`);
+      const n = p.tokenIds.length;
+      addLog(true, `Scanned pass: ${n} ticket${n > 1 ? "s" : ""} (${p.seats}) from ${p.holder.slice(0, 8)}…`);
       try {
         await enqueue(async () => {
           const hash = await gateClient.writeContract({
             address: state.collection,
             abi: collectionAbi,
-            functionName: "checkIn",
-            args: [BigInt(p.tokenId), p.code, p.sig as `0x${string}`],
+            functionName: "checkInBatch",
+            args: [p.tokenIds.map(BigInt), p.code, p.sig as `0x${string}`],
           });
           await publicClient.waitForTransactionReceipt({ hash });
         });
-        addLog(true, `✓ Welcome! Seat ${p.seat} checked in — ticket returned to event wallet, stub minted.`);
+        addLog(true, `✓ Welcome! ${p.seats} checked in — tickets returned to event wallet, stubs minted.`);
         announceResult({
-          tokenId: p.tokenId,
+          tokenIds: p.tokenIds,
           ok: true,
-          message: `✓ Checked in! Seat ${p.seat} swapped for a souvenir stub. Enjoy the show.`,
+          message: `✓ Checked in! ${p.seats} swapped for souvenir stub${n > 1 ? "s" : ""}. Enjoy the show.`,
         });
       } catch (e) {
         const reason = shortError(e);
-        addLog(false, `✗ Rejected seat ${p.seat}: ${reason}`);
+        addLog(false, `✗ Rejected ${p.seats}: ${reason}`);
         announceResult({
-          tokenId: p.tokenId,
+          tokenIds: p.tokenIds,
           ok: false,
           message: `✗ Gate rejected your pass: ${reason}`,
         });

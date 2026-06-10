@@ -5,7 +5,7 @@ Last updated: 2026-06-10.
 ## What exists
 
 A working Foundry project under `contracts/` implementing the full design in
-[ARCHITECTURE.md](./ARCHITECTURE.md) — six contracts, 33 passing tests, deploy
+[ARCHITECTURE.md](./ARCHITECTURE.md) — six contracts, 39 passing tests, deploy
 script verified on anvil — plus a **demo web app under `web/`** (Vite + React +
 viem) with three surfaces: organizer dashboard (list seats, watch sales and
 check-ins), attendee phone simulator (buy seats, hold tickets, check in), and
@@ -27,7 +27,7 @@ contracts/
   test/
     Base.t.sol                 shared deploy + helpers (signing, code, check-in)
     LoyaltyRegistry.t.sol      4 tests
-    TicketCollection.t.sol     14 tests
+    TicketCollection.t.sol     24 tests
     ResaleMarketplace.t.sol    4 tests
     TicketAuction.t.sol        6 tests
     E2E.t.sol                  1 full-lifecycle test
@@ -47,7 +47,7 @@ web/
 ```bash
 cd contracts
 forge build
-forge test                                    # 33 tests, all passing
+forge test                                    # 39 tests, all passing
 forge test --match-path test/E2E.t.sol -vv    # full lifecycle
 
 # Demo web app (organizer + attendee phone + gate)
@@ -117,9 +117,15 @@ PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
 ## Key facts about the demo web app (2026-06-10)
 
 - **Primary sale is now on-chain**: `TicketCollection.listSeats(labels, tier,
-  price)` (organizer) + `buySeat(label)` payable (buyer mints directly, pays
-  organizer). `seatOf(tokenId)` maps tickets to seat labels; `allSeats()`
+  price)` (organizer) + `buySeat(label)` / `buySeats(labels[])` payable (buyer
+  mints directly, pays organizer; batch is one tx, all-or-nothing, value must
+  equal the sum). `seatOf(tokenId)` maps tickets to seat labels; `allSeats()`
   enumerates for UIs.
+- **Batch check-in**: `checkInBatch(tokenIds[], code, holderSig)` — same-holder
+  tickets, venue code typed once, ONE signature over
+  `keccak256(abi.encodePacked(tokenIds))` in the digest's tokenId slot, atomic.
+  The UI cart/selection flows use the batch paths exclusively (single = batch
+  of one). JS mirror: `batchCheckInDigest` in `web/src/lib/chain.ts`.
 - Web app is dependency-light: react, react-dom, viem only. Hash routing
   (`#/organizer`, `#/attendee`, `#/gate`; default = all three side by side).
 - Personas = anvil well-known accounts (no wallet extension): #0 admin,

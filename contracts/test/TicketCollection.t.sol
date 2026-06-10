@@ -70,6 +70,46 @@ contract TicketCollectionTest is Base {
         c.buySeat{value: FACE}("Z-99");
     }
 
+    function test_BuySeatsBatchOneTx() public {
+        TicketCollection c = _createEvent();
+        _listSeats(c);
+        address fan = makeAddr("fan");
+        vm.deal(fan, 3 * FACE);
+
+        string[] memory picks = new string[](2);
+        picks[0] = "A-1";
+        picks[1] = "A-3";
+
+        uint256 orgBefore = organizer.balance;
+        vm.prank(fan);
+        uint256[] memory ids = c.buySeats{value: 2 * FACE}(picks);
+
+        assertEq(ids.length, 2);
+        assertEq(c.ownerOf(ids[0]), fan);
+        assertEq(c.ownerOf(ids[1]), fan);
+        assertEq(c.seatOf(ids[1]), "A-3");
+        assertEq(organizer.balance - orgBefore, 2 * FACE);
+    }
+
+    function test_BuySeatsWrongTotalReverts() public {
+        TicketCollection c = _createEvent();
+        _listSeats(c);
+        address fan = makeAddr("fan");
+        vm.deal(fan, 3 * FACE);
+
+        string[] memory picks = new string[](2);
+        picks[0] = "A-1";
+        picks[1] = "A-2";
+
+        vm.prank(fan);
+        vm.expectRevert(TicketCollection.WrongPayment.selector);
+        c.buySeats{value: FACE}(picks); // half the total
+
+        // Atomic: nothing sold.
+        (, , , uint256 sold) = c.seatListing(keccak256("A-1"));
+        assertEq(sold, 0);
+    }
+
     function test_OnlyOrganizerCanListSeats() public {
         TicketCollection c = _createEvent();
         string[] memory labels = new string[](1);
@@ -242,6 +282,82 @@ contract TicketCollectionTest is Base {
         vm.prank(rando);
         vm.expectRevert(bytes("not authorized"));
         c.setGateCode(keccak256("X"));
+    }
+
+    // --- batch check-in ---
+
+    function test_CheckInBatchOneSignature() public {
+        TicketCollection c = _createEvent();
+        (address holder, uint256 pk) = makeAddrAndKey("holder");
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = _mint(c, holder);
+        ids[1] = _mint(c, holder);
+
+        _setGateCode(c, VENUE_CODE);
+        bytes memory sig = _signCheckInBatch(c, pk, holder, ids, VENUE_CODE);
+        vm.prank(gate);
+        c.checkInBatch(ids, VENUE_CODE, sig);
+
+        // Both tickets swapped; two stubs; double loyalty; nonce bumped once.
+        assertEq(c.ownerOf(ids[0]), organizer);
+        assertEq(c.ownerOf(ids[1]), organizer);
+        assertEq(stub.balanceOf(holder), 2);
+        assertEq(loyalty.scoreOf(holder), 2 * ATTEND_POINTS);
+        assertEq(c.checkInNonce(holder), 1);
+    }
+
+    function test_CheckInBatchAtomicWhenOneUsed() public {
+        TicketCollection c = _createEvent();
+        (address holder, uint256 pk) = makeAddrAndKey("holder");
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = _mint(c, holder);
+        ids[1] = _mint(c, holder);
+
+        _checkIn(c, holder, pk, ids[1]); // second ticket already used → now owned
+        // by the event wallet, so the batch fails the same-holder check.
+        // (A used-but-still-held state is unreachable: check-in always
+        // transfers the ticket away.)
+
+        bytes memory sig = _signCheckInBatch(c, pk, holder, ids, VENUE_CODE);
+        vm.prank(gate);
+        vm.expectRevert(bytes("mixed holders"));
+        c.checkInBatch(ids, VENUE_CODE, sig);
+
+        // Atomic: the first (valid) ticket is untouched by the failed batch.
+        assertEq(c.ownerOf(ids[0]), holder);
+        assertEq(stub.balanceOf(holder), 1);
+    }
+
+    function test_CheckInBatchMixedHoldersReverts() public {
+        TicketCollection c = _createEvent();
+        (address holder, uint256 pk) = makeAddrAndKey("holder");
+        address other = makeAddr("other");
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = _mint(c, holder);
+        ids[1] = _mint(c, other);
+
+        _setGateCode(c, VENUE_CODE);
+        bytes memory sig = _signCheckInBatch(c, pk, holder, ids, VENUE_CODE);
+        vm.prank(gate);
+        vm.expectRevert(bytes("mixed holders"));
+        c.checkInBatch(ids, VENUE_CODE, sig);
+    }
+
+    function test_CheckInBatchSigCoversExactTokenList() public {
+        TicketCollection c = _createEvent();
+        (address holder, uint256 pk) = makeAddrAndKey("holder");
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = _mint(c, holder);
+        ids[1] = _mint(c, holder);
+
+        _setGateCode(c, VENUE_CODE);
+        // Sign over only the first ticket, submit both — must fail.
+        uint256[] memory one = new uint256[](1);
+        one[0] = ids[0];
+        bytes memory sig = _signCheckInBatch(c, pk, holder, one, VENUE_CODE);
+        vm.prank(gate);
+        vm.expectRevert(bytes("bad holder signature"));
+        c.checkInBatch(ids, VENUE_CODE, sig);
     }
 
     // --- post-check-in invariants ---

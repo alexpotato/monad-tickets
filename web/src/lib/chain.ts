@@ -6,6 +6,7 @@ import {
   keccak256,
   toBytes,
   encodeAbiParameters,
+  encodePacked,
   type Address,
   type Hex,
 } from "viem";
@@ -61,9 +62,11 @@ export const collectionAbi = parseAbi([
   "function ownerOf(uint256) view returns (address)",
   "function ticket(uint256) view returns ((uint16 tier, uint256 facePrice, uint64 mintedAt, uint64 usedAt, uint256 lastSalePrice))",
   "function buySeat(string) payable returns (uint256)",
+  "function buySeats(string[]) payable returns (uint256[])",
   "function checkInNonce(address) view returns (uint256)",
   "function setGateCode(bytes32)",
   "function checkIn(uint256, string, bytes)",
+  "function checkInBatch(uint256[], string, bytes)",
   "function codeValidity() view returns (uint64)",
   "function codeSetAt() view returns (uint64)",
   "function listSeats(string[], uint16, uint256)",
@@ -98,6 +101,35 @@ export function checkInDigest(
         { type: "bytes32" },
       ],
       [collection, BigInt(foundry.id), tokenId, nonce, keccak256(toBytes(code))],
+    ),
+  );
+}
+
+/// Batch variant — one signature over the whole token list, mirroring
+/// TicketCollection.checkInBatch: the inner tokenId slot becomes
+/// keccak256(abi.encodePacked(tokenIds)).
+export function batchCheckInDigest(
+  collection: Address,
+  tokenIds: bigint[],
+  nonce: bigint,
+  code: string,
+): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "address" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "bytes32" },
+      ],
+      [
+        collection,
+        BigInt(foundry.id),
+        keccak256(encodePacked(["uint256[]"], [tokenIds])),
+        nonce,
+        keccak256(toBytes(code)),
+      ],
     ),
   );
 }

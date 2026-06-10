@@ -3,11 +3,11 @@
 // the side-by-side demo view and separate-tab views both work.
 
 export type ScanPayload = {
-  tokenId: string; // bigint as string for structured-clone safety
-  code: string; // the venue code the attendee typed
-  sig: string;
+  tokenIds: string[]; // bigints as strings for structured-clone safety
+  code: string; // the venue code the attendee typed (once, for the batch)
+  sig: string; // one signature covering the whole token list
   holder: string;
-  seat: string;
+  seats: string; // display label, e.g. "A-1, A-2"
 };
 
 const CHANNEL = "tickets-gate-scan";
@@ -25,7 +25,7 @@ export function onScan(handler: (p: ScanPayload) => void): () => void {
 // Gate → attendee result notifications (so the phone shows the outcome).
 const RESULT_CHANNEL = "tickets-gate-result";
 
-export type ScanResult = { tokenId: string; ok: boolean; message: string };
+export type ScanResult = { tokenIds: string[]; ok: boolean; message: string };
 
 export function announceResult(r: ScanResult) {
   new BroadcastChannel(RESULT_CHANNEL).postMessage(r);
