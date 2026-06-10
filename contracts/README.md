@@ -17,7 +17,8 @@ update) economical at on-sale volumes.
 | `TicketCollection` | One ERC-721 per event. Restricted transfer (only the official market/auction can move tickets — OTC transfers revert). Holds check-in. |
 | `ResaleMarketplace` | The only fixed-price resale path. Price-capped, routes royalty, applies flip penalty. |
 | `TicketAuction` | Score-weighted auctions for primary + resale. Loyalty handicaps bids so loyal attendees can win over higher cash bids; winner pays their actual bid. |
-| `EventFactory` | Deploys per-event collections wired to the shared registry/market/auction. |
+| `AttendanceStub` | Soulbound souvenir minted at check-in when the ticket is handed back to the event wallet. Permanent proof-of-attendance (POAP-style). |
+| `EventFactory` | Deploys per-event collections wired to the shared registry/stub/market/auction. |
 
 ## Anti-scalping mechanism
 
@@ -28,15 +29,18 @@ update) economical at on-sale volumes.
 3. **Soulbound attendance score** rewards hold-and-attend (presale priority +
    discounts) and is forfeited by flipping. In auctions, score directly
    handicaps bids.
-4. **Check-in** binds real attendance to a wallet (signature proves wallet
-   control; no KYC), making the score a meaningful "who actually uses tickets"
-   signal.
+4. **Check-in is a ticket swap** that binds real attendance to a wallet: the
+   attendee types the venue's rotating code (bound into their signature — code
+   knowledge + wallet control in one), the gate submits and pays gas (free for
+   the attendee), the ticket transfers back to the event wallet (the canonical
+   attendance record — a used ticket can't be reused or resold), and a
+   soulbound stub + loyalty credit go to the attendee. No KYC.
 
 ## Build / test / deploy
 
 ```bash
 forge build
-forge test                                    # 22 tests
+forge test                                    # 29 tests
 forge test --match-path test/E2E.t.sol -vv    # full lifecycle
 
 # Deploy (anvil or Monad testnet)

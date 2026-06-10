@@ -15,14 +15,17 @@ on-chain, to distinguish genuine attendees from scalpers and reward the former.
 ## Quick orientation
 
 Code lives in `contracts/` (Foundry, Solidity 0.8.28 + `via_ir`, OpenZeppelin
-v5.1.0). Five contracts: `LoyaltyRegistry`, `TicketCollection`,
-`ResaleMarketplace`, `TicketAuction`, `EventFactory`. 22 passing tests.
+v5.1.0). Six contracts: `LoyaltyRegistry`, `AttendanceStub`,
+`TicketCollection`, `ResaleMarketplace`, `TicketAuction`, `EventFactory`.
+29 passing tests.
 
 ```bash
 cd contracts && forge test
 ```
 
-The four locked product decisions: hybrid-loyalty resale (capped + soulbound
+The locked product decisions: hybrid-loyalty resale (capped + soulbound
 reputation), check-in-only identity (signature, no KYC), restricted transfer
-(official market is the only resale path), and score-weighted auctions (loyalty
-handicaps bids; winner pays their own bid).
+(official market is the only resale path), score-weighted auctions (loyalty
+handicaps bids; winner pays their own bid), and ticket-swap check-in (attendee
+types a rotating venue code, gate pays gas, ticket returns to the event wallet,
+soulbound souvenir stub minted to the attendee).

@@ -131,6 +131,13 @@ A factory + per-event-collection pattern. Suggested Foundry layout under
 - Soulbound so reputation can't be bought/transferred — it must be earned by the
   same wallet that attends. This directly answers "who actually uses tickets."
 
+### 6. `AttendanceStub.sol` (shared, soulbound)
+- Souvenir ERC-721 minted to the attendee at check-in, in exchange for the
+  ticket handed back to the event wallet. Mint-only (`_update` reverts any
+  transfer); records provenance (collection, original ticket id, timestamp).
+- Each `TicketCollection` gets `MINTER_ROLE`, granted by the factory at event
+  creation. The stub is the user-visible artifact behind the loyalty score.
+
 ## Anti-scalping logic (how it ties together)
 
 1. Every ticket is an NFT with immutable provenance; resales can *only* go
@@ -145,16 +152,30 @@ A factory + per-event-collection pattern. Suggested Foundry layout under
    meaningful (a wallet that buys 50 tickets and checks in 0 is visibly a
    reseller in the on-chain data).
 
-## Check-in (identity at the door)
+## Check-in (identity + presence at the door)
 
-- Pseudonymous until the gate. At entry, the gate app challenges the holder to
-  sign a fresh nonce with the ticket-holding wallet (proves wallet control;
-  no KYC). Gate submits `checkIn(tokenId, signature)`.
-- `checkIn` verifies the signer owns `tokenId`, sets `usedAt`, makes the ticket
-  non-transferable, and credits the holder's attendance score via
-  `LoyaltyRegistry`.
-- Optional ID match at the gate (off-chain, organizer policy) layered on top —
-  the on-chain record only needs wallet-control proof.
+Check-in is a **ticket swap**: the attendee hands the ticket back to the event
+wallet and receives a soulbound souvenir stub. The ERC-721 `Transfer` back to
+the event wallet is the canonical, indexer-friendly attendance record, and a
+used ticket provably cannot be reused or resold — the attendee no longer owns it.
+
+- **Pseudonymous until the gate; no KYC.** The attendee proves wallet control
+  by signing; identity (optional ID match) stays an off-chain organizer policy.
+- **Typed venue code proves presence.** Venue screens display a rotating code
+  (hash committed on-chain via `setGateCode`; rotation is cheap on Monad, with
+  a short grace window for signatures built just before a rotation). The
+  attendee types the code into the app and it is bound into the digest they
+  sign: `(collection, chainid, tokenId, nonce, codeHash)`. The contract checks
+  both that the code is the venue's active one and that the holder signed over
+  exactly that code. Caveat: a code proves knowledge, not GPS location — short
+  windows plus gate submission make remote abuse impractical.
+- **Free for the attendee.** The attendee only produces a signature; the
+  `GATE_ROLE` device submits `checkIn(tokenId, code, holderSig)` and pays gas.
+  The gate being `msg.sender` doubles as a physical co-attestation.
+- **Effects, atomically:** ticket transfers holder → event wallet (organizer),
+  `usedAt` set, soulbound `AttendanceStub` minted to the attendee (POAP-style,
+  with provenance: collection, ticket id, timestamp), loyalty credited via
+  `LoyaltyRegistry.recordAttendance`. Replay is blocked by a per-holder nonce.
 
 ## Tech stack
 
@@ -175,6 +196,7 @@ A factory + per-event-collection pattern. Suggested Foundry layout under
   src/ResaleMarketplace.sol
   src/TicketAuction.sol
   src/LoyaltyRegistry.sol
+  src/AttendanceStub.sol
   test/            forge tests (see verification)
   script/Deploy.s.sol
 /indexer           log indexer + read API

@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {TicketCollection} from "./TicketCollection.sol";
 import {LoyaltyRegistry} from "./LoyaltyRegistry.sol";
+import {AttendanceStub} from "./AttendanceStub.sol";
 
 /// @title EventFactory
 /// @notice Deploys a per-event TicketCollection wired to the shared
@@ -14,6 +15,7 @@ import {LoyaltyRegistry} from "./LoyaltyRegistry.sol";
 ///         and auction are granted WRITER_ROLE once, here, the first time.
 contract EventFactory is AccessControl {
     LoyaltyRegistry public immutable loyalty;
+    AttendanceStub public immutable stub;
     address public immutable marketplace;
     address public immutable auction;
 
@@ -28,8 +30,15 @@ contract EventFactory is AccessControl {
         uint256 resaleCap
     );
 
-    constructor(address loyalty_, address marketplace_, address auction_, address admin) {
+    constructor(
+        address loyalty_,
+        address stub_,
+        address marketplace_,
+        address auction_,
+        address admin
+    ) {
         loyalty = LoyaltyRegistry(loyalty_);
+        stub = AttendanceStub(stub_);
         marketplace = marketplace_;
         auction = auction_;
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
@@ -66,6 +75,7 @@ contract EventFactory is AccessControl {
             p.symbol,
             p.organizer,
             address(loyalty),
+            address(stub),
             marketplace,
             p.gate,
             p.eventStartTime,
@@ -78,8 +88,10 @@ contract EventFactory is AccessControl {
         // The auction also moves tickets / mints, so it needs MARKET_ROLE too.
         c.grantRole(c.MARKET_ROLE(), auction);
 
-        // The collection credits loyalty on check-in → needs WRITER_ROLE.
+        // The collection credits loyalty on check-in → needs WRITER_ROLE,
+        // and mints the souvenir stub at check-in → needs MINTER_ROLE.
         loyalty.grantRole(loyalty.WRITER_ROLE(), collection);
+        stub.grantRole(stub.MINTER_ROLE(), collection);
 
         events.push(collection);
         isEvent[collection] = true;

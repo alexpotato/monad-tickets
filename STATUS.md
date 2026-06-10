@@ -1,17 +1,18 @@
 # Build Status — On-Chain Ticketing on Monad
 
-Last updated: 2026-06-09.
+Last updated: 2026-06-10.
 
 ## What exists
 
 A working Foundry project under `contracts/` implementing the full design in
-[ARCHITECTURE.md](./ARCHITECTURE.md). All five contracts are implemented, 22
+[ARCHITECTURE.md](./ARCHITECTURE.md). All six contracts are implemented, 29
 tests pass, and the deploy script runs against a live anvil node.
 
 ```
 contracts/
   src/
     LoyaltyRegistry.sol        soulbound per-wallet reputation
+    AttendanceStub.sol         soulbound souvenir minted at check-in
     TicketCollection.sol       ERC-721 per event, restricted transfer + check-in
     ResaleMarketplace.sol      capped fixed-price resale, royalty, flip penalty
     TicketAuction.sol          score-weighted auction (primary + resale)
@@ -19,10 +20,11 @@ contracts/
     interfaces/
       ILoyaltyRegistry.sol
       ITicketCollection.sol
+      IAttendanceStub.sol
   test/
-    Base.t.sol                 shared deploy + helpers (signing, mint)
+    Base.t.sol                 shared deploy + helpers (signing, code, check-in)
     LoyaltyRegistry.t.sol      4 tests
-    TicketCollection.t.sol     7 tests
+    TicketCollection.t.sol     14 tests
     ResaleMarketplace.t.sol    4 tests
     TicketAuction.t.sol        6 tests
     E2E.t.sol                  1 full-lifecycle test
@@ -35,7 +37,7 @@ contracts/
 ```bash
 cd contracts
 forge build
-forge test                                    # 22 tests, all passing
+forge test                                    # 29 tests, all passing
 forge test --match-path test/E2E.t.sol -vv    # full lifecycle
 
 anvil &
@@ -58,10 +60,26 @@ PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
   raw `transferFrom`. So the marketplace/auction move tickets via
   `marketTransfer` (which uses `_safeTransfer` internally). This is the safer
   design: no role can seize a ticket via `transferFrom` without approval.
-- **Check-in** verifies an `eth_sign`-style signature: digest =
-  `toEthSignedMessageHash(keccak256(abi.encode(collection, chainid, tokenId, nonce)))`,
-  recovered signer must equal `ownerOf(tokenId)`. Per-holder `checkInNonce`
-  gives replay protection. Submitted by a `GATE_ROLE` address.
+- **Check-in is a ticket swap (2026-06-10 redesign).** The attendee types the
+  venue-displayed rotating code; the app builds the digest
+  `toEthSignedMessageHash(keccak256(abi.encode(collection, chainid, tokenId,
+  nonce, keccak256(code))))`; the holder signs; the `GATE_ROLE` device submits
+  `checkIn(tokenId, code, holderSig)` and pays gas (free for the attendee). On
+  success: ticket transfers holder → organizer (event wallet) under a scoped
+  `_inCheckIn` flag in `_update`, `usedAt` set, soulbound `AttendanceStub`
+  minted to the holder, loyalty credited. Per-holder `checkInNonce` blocks
+  replay.
+- **Rotating venue code:** `setGateCode(bytes32 codeHash)` (gate or organizer)
+  commits the hash; plaintext shows on venue screens. `codeValidity` defaults
+  to 15 min (organizer-settable); the previous code stays valid for a 2-min
+  `CODE_GRACE` after rotation so just-built signatures still land. Contract
+  checks the submitted code against the active/grace commitment AND the
+  signature binds the holder to that exact code. (A code proves knowledge, not
+  GPS — short windows + gate submission mitigate.)
+- **AttendanceStub** is mint-only soulbound (`_update` reverts when
+  `from != 0`); records provenance (collection, ticket id, attendedAt). The
+  factory grants each new collection `MINTER_ROLE`; the factory must hold stub
+  admin (deploy script + test base both grant it right after construction).
 - **Auction model chosen: first-price ascending with score handicap.** Each bid
   escrows `msg.value`; ranking is by `effectiveBid = bid + bid*bonusBps/10_000`;
   the winner pays their *own* raw bid; outbid deposits are pulled back via

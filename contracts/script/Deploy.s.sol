@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import {Script, console} from "forge-std/Script.sol";
 import {LoyaltyRegistry} from "../src/LoyaltyRegistry.sol";
+import {AttendanceStub} from "../src/AttendanceStub.sol";
 import {ResaleMarketplace} from "../src/ResaleMarketplace.sol";
 import {TicketAuction} from "../src/TicketAuction.sol";
 import {EventFactory} from "../src/EventFactory.sol";
@@ -27,18 +28,22 @@ contract Deploy is Script {
         }
 
         LoyaltyRegistry loyalty = new LoyaltyRegistry(admin);
+        AttendanceStub stub = new AttendanceStub(admin);
         ResaleMarketplace market = new ResaleMarketplace(address(loyalty), BASE_FLIP_PENALTY);
         TicketAuction auction = new TicketAuction(address(loyalty), BASE_FLIP_PENALTY);
-        EventFactory factory =
-            new EventFactory(address(loyalty), address(market), address(auction), admin);
+        EventFactory factory = new EventFactory(
+            address(loyalty), address(stub), address(market), address(auction), admin
+        );
 
-        // Factory must be a loyalty admin to grant writer roles, then wire.
+        // Factory must be a loyalty + stub admin to grant per-event roles.
         loyalty.grantRole(loyalty.DEFAULT_ADMIN_ROLE(), address(factory));
+        stub.grantRole(stub.DEFAULT_ADMIN_ROLE(), address(factory));
         factory.wireSharedContracts();
 
         vm.stopBroadcast();
 
         console.log("LoyaltyRegistry:  ", address(loyalty));
+        console.log("AttendanceStub:   ", address(stub));
         console.log("ResaleMarketplace:", address(market));
         console.log("TicketAuction:    ", address(auction));
         console.log("EventFactory:     ", address(factory));

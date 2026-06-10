@@ -37,31 +37,30 @@ contract E2ETest is Base {
         assertEq(organizer.balance - orgBefore, (RESALE_CAP * ROYALTY_BPS) / 10_000);
         assertLt(loyalty.scoreOf(alice), 0);
 
-        // --- 3. Bob checks in → earns loyalty, ticket freezes. ---
-        // (Bob signs; the gate submits.)
+        // --- 3. Bob checks in: types the venue code, signs, gate submits and
+        //        pays gas. Ticket returns to the event wallet; Bob gets a
+        //        soulbound stub + loyalty. ---
         (address bobSigner, uint256 bobPk) = makeAddrAndKey("bobSigner");
         // Move the ticket to a signer wallet we hold the key for, via the market.
         vm.prank(address(market));
         c.marketTransfer(bob, bobSigner, t1, RESALE_CAP);
 
-        bytes memory sig = _signCheckIn(c, bobPk, bobSigner, t1);
-        vm.prank(gate);
-        c.checkIn(t1, sig);
+        _checkIn(c, bobSigner, bobPk, t1);
+        assertEq(c.ownerOf(t1), organizer); // ticket handed back — attendance record
+        assertEq(stub.ownerOf(1), bobSigner); // souvenir stub in attendee's wallet
         assertEq(c.ticket(t1).usedAt, uint64(block.timestamp));
         assertEq(loyalty.scoreOf(bobSigner), ATTEND_POINTS);
 
         // Used ticket can no longer move.
         vm.prank(address(market));
         vm.expectRevert(TicketCollection.TicketUsed.selector);
-        c.marketTransfer(bobSigner, alice, t1, FACE);
+        c.marketTransfer(organizer, alice, t1, FACE);
 
         // --- 4. Score-weighted primary auction: loyal wallet beats cash. ---
         // Give `loyal` a positive score via a check-in on a fresh ticket.
         (address loyal, uint256 loyalPk) = makeAddrAndKey("loyal");
         uint256 tL = _mint(c, loyal);
-        bytes memory lsig = _signCheckIn(c, loyalPk, loyal, tL);
-        vm.prank(gate);
-        c.checkIn(tL, lsig); // loyal now has ATTEND_POINTS (10) → 10% handicap
+        _checkIn(c, loyal, loyalPk, tL); // loyal now has ATTEND_POINTS (10) → 10% handicap
 
         address whale = makeAddr("whale"); // deep pockets, zero loyalty
         vm.prank(organizer);

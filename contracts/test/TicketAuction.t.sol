@@ -17,9 +17,7 @@ contract TicketAuctionTest is Base {
     /// @dev Give `who` a loyalty score by minting+checking-in a throwaway ticket.
     function _earnLoyalty(TicketCollection c, address who, uint256 pk) internal {
         uint256 id = _mint(c, who);
-        bytes memory sig = _signCheckIn(c, pk, who, id);
-        vm.prank(gate);
-        c.checkIn(id, sig);
+        _checkIn(c, who, pk, id);
     }
 
     function test_LoyaltyHandicapFlipsWinner() public {

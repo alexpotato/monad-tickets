@@ -7,14 +7,18 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {ILoyaltyRegistry} from "./interfaces/ILoyaltyRegistry.sol";
 import {ITicketCollection} from "./interfaces/ITicketCollection.sol";
+import {IAttendanceStub} from "./interfaces/IAttendanceStub.sol";
 
 /// @title TicketCollection
 /// @notice One ERC-721 collection per event. Tickets are restricted-transfer:
 ///         they can only move through an authorized market contract (resale
 ///         marketplace / auction) or the organizer, never peer-to-peer. This
 ///         guarantees every resale is captured and price-checked on-chain.
-///         Attendance is recorded at the door via `checkIn`, which credits the
-///         holder's soulbound loyalty score and freezes the ticket.
+///         At the door, `checkIn` swaps the ticket for a souvenir: the holder
+///         signs over a venue-displayed rotating code, the gate submits (and
+///         pays gas), the ticket transfers back to the event wallet — the
+///         canonical on-chain attendance record — and a soulbound stub is
+///         minted to the attendee along with their loyalty credit.
 contract TicketCollection is ERC721, AccessControl, ITicketCollection {
     using ECDSA for bytes32;
 
@@ -24,11 +28,22 @@ contract TicketCollection is ERC721, AccessControl, ITicketCollection {
 
     address public immutable organizer;
     ILoyaltyRegistry public immutable loyalty;
+    IAttendanceStub public immutable stub;
 
     uint64 public immutable eventStartTime;
     uint256 public immutable resaleCap; // max resale price (wei); ceiling for resale auctions too
     uint96 public immutable royaltyBps; // resale royalty to organizer, in bps
     int256 public immutable attendPoints; // loyalty awarded per check-in
+
+    // --- rotating venue code (typed by the attendee, bound into their sig) ---
+    uint64 public constant CODE_GRACE = 2 minutes; // old code stays valid briefly after rotation
+    uint64 public codeValidity = 15 minutes;
+    bytes32 public currentCodeHash;
+    uint64 public codeSetAt;
+    bytes32 public prevCodeHash;
+    uint64 public prevExpiresAt;
+
+    bool private _inCheckIn; // scopes the check-in transfer privilege in _update
 
     uint256 private _nextId = 1;
     mapping(uint256 => Ticket) private _tickets;
@@ -36,16 +51,19 @@ contract TicketCollection is ERC721, AccessControl, ITicketCollection {
 
     event Minted(uint256 indexed tokenId, address indexed to, uint16 tier, uint256 price);
     event CheckedIn(uint256 indexed tokenId, address indexed holder, uint64 at);
+    event GateCodeRotated(bytes32 indexed codeHash, uint64 at);
 
     error TransferRestricted();
     error TicketUsed();
     error PriceAboveCap();
+    error BadGateCode();
 
     constructor(
         string memory name_,
         string memory symbol_,
         address organizer_,
         address loyalty_,
+        address stub_,
         address market_,
         address gate_,
         uint64 eventStartTime_,
@@ -56,6 +74,7 @@ contract TicketCollection is ERC721, AccessControl, ITicketCollection {
         require(royaltyBps_ <= 10_000, "royalty too high");
         organizer = organizer_;
         loyalty = ILoyaltyRegistry(loyalty_);
+        stub = IAttendanceStub(stub_);
         eventStartTime = eventStartTime_;
         resaleCap = resaleCap_;
         royaltyBps = royaltyBps_;
@@ -106,11 +125,14 @@ contract TicketCollection is ERC721, AccessControl, ITicketCollection {
     {
         address from = _ownerOf(tokenId);
         bool isMintOrBurn = from == address(0) || to == address(0);
-        bool privileged = hasRole(MARKET_ROLE, msg.sender) || hasRole(ORGANIZER_ROLE, msg.sender);
+        // _inCheckIn permits exactly one move — the ticket-return inside
+        // checkIn — without giving the gate any general transfer power.
+        bool privileged =
+            _inCheckIn || hasRole(MARKET_ROLE, msg.sender) || hasRole(ORGANIZER_ROLE, msg.sender);
 
         if (!isMintOrBurn && !privileged) revert TransferRestricted();
         // A used (checked-in) ticket is frozen — it cannot be resold.
-        if (!isMintOrBurn && _tickets[tokenId].usedAt != 0) revert TicketUsed();
+        if (!isMintOrBurn && !_inCheckIn && _tickets[tokenId].usedAt != 0) revert TicketUsed();
 
         return super._update(to, tokenId, auth);
     }
@@ -128,25 +150,75 @@ contract TicketCollection is ERC721, AccessControl, ITicketCollection {
         _safeTransfer(from, to, tokenId, "");
     }
 
-    // --- check-in (identity at the door) ---
+    // --- check-in (identity + presence at the door) ---
 
-    /// @notice Check in a ticket. The gate submits a signature produced by the
-    ///         current holder over (tokenId, nonce, this contract, chainid),
-    ///         proving wallet control without any KYC. Marks the ticket used,
-    ///         freezes it, and credits the holder's loyalty score.
-    function checkIn(uint256 tokenId, bytes calldata holderSig) external onlyRole(GATE_ROLE) {
+    /// @notice Rotate the venue code. The venue displays the plaintext code on
+    ///         screens; only its hash goes on-chain. The outgoing code stays
+    ///         valid for CODE_GRACE so signatures built moments before a
+    ///         rotation still land. Cheap to call every few minutes on Monad.
+    function setGateCode(bytes32 codeHash) external {
+        require(
+            hasRole(GATE_ROLE, msg.sender) || hasRole(ORGANIZER_ROLE, msg.sender), "not authorized"
+        );
+        if (currentCodeHash != bytes32(0)) {
+            prevCodeHash = currentCodeHash;
+            prevExpiresAt = uint64(block.timestamp) + CODE_GRACE;
+        }
+        currentCodeHash = codeHash;
+        codeSetAt = uint64(block.timestamp);
+        emit GateCodeRotated(codeHash, codeSetAt);
+    }
+
+    function setCodeValidity(uint64 seconds_) external onlyRole(ORGANIZER_ROLE) {
+        require(seconds_ > 0, "validity must be > 0");
+        codeValidity = seconds_;
+    }
+
+    function _codeIsActive(bytes32 h) internal view returns (bool) {
+        if (h != bytes32(0) && h == currentCodeHash && block.timestamp <= codeSetAt + codeValidity)
+        {
+            return true;
+        }
+        if (h != bytes32(0) && h == prevCodeHash && block.timestamp <= prevExpiresAt) return true;
+        return false;
+    }
+
+    /// @notice Check in a ticket — the attendee swaps it for a souvenir stub.
+    ///
+    ///         The attendee types the venue-displayed code into their app and
+    ///         signs (collection, chainid, tokenId, nonce, codeHash): wallet
+    ///         control AND code knowledge in one signature, with the nonce
+    ///         preventing replay. The gate submits and pays gas, so check-in is
+    ///         free for the attendee. On success the ticket transfers back to
+    ///         the event wallet (the immutable attendance record), a soulbound
+    ///         AttendanceStub is minted to the holder, and their loyalty score
+    ///         is credited.
+    function checkIn(uint256 tokenId, string calldata code, bytes calldata holderSig)
+        external
+        onlyRole(GATE_ROLE)
+    {
         address holder = ownerOf(tokenId);
         Ticket storage t = _tickets[tokenId];
         if (t.usedAt != 0) revert TicketUsed();
 
+        bytes32 codeHash = keccak256(bytes(code));
+        if (!_codeIsActive(codeHash)) revert BadGateCode();
+
         uint256 nonce = checkInNonce[holder];
         bytes32 digest = MessageHashUtils.toEthSignedMessageHash(
-            keccak256(abi.encode(address(this), block.chainid, tokenId, nonce))
+            keccak256(abi.encode(address(this), block.chainid, tokenId, nonce, codeHash))
         );
         require(digest.recover(holderSig) == holder, "bad holder signature");
         checkInNonce[holder] = nonce + 1;
 
+        // Hand the ticket back to the event wallet — the canonical on-chain
+        // proof of attendance. _inCheckIn scopes the transfer privilege.
+        _inCheckIn = true;
+        _safeTransfer(holder, organizer, tokenId, "");
+        _inCheckIn = false;
+
         t.usedAt = uint64(block.timestamp);
+        stub.mint(holder, address(this), tokenId);
         loyalty.recordAttendance(holder, tokenId, attendPoints);
         emit CheckedIn(tokenId, holder, t.usedAt);
     }
