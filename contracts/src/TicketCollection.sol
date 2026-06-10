@@ -49,14 +49,30 @@ contract TicketCollection is ERC721, AccessControl, ITicketCollection {
     mapping(uint256 => Ticket) private _tickets;
     mapping(address => uint256) public checkInNonce; // replay protection for check-in sigs
 
+    // --- primary sale: named seats listed by the organizer ---
+    struct SeatListing {
+        uint16 tier;
+        uint256 price;
+        bool active;
+        uint256 tokenId; // 0 until sold
+    }
+
+    mapping(bytes32 => SeatListing) public seatListing; // keccak256(label) => listing
+    string[] public seatLabels; // enumeration for UIs
+    mapping(uint256 => string) public seatOf; // tokenId => seat label
+
     event Minted(uint256 indexed tokenId, address indexed to, uint16 tier, uint256 price);
     event CheckedIn(uint256 indexed tokenId, address indexed holder, uint64 at);
     event GateCodeRotated(bytes32 indexed codeHash, uint64 at);
+    event SeatsListed(uint16 indexed tier, uint256 price, uint256 count);
+    event SeatSold(string label, uint256 indexed tokenId, address indexed buyer, uint256 price);
 
     error TransferRestricted();
     error TicketUsed();
     error PriceAboveCap();
     error BadGateCode();
+    error SeatUnavailable();
+    error WrongPayment();
 
     constructor(
         string memory name_,
@@ -109,6 +125,57 @@ contract TicketCollection is ERC721, AccessControl, ITicketCollection {
         });
         _safeMint(to, tokenId);
         emit Minted(tokenId, to, tier, price);
+    }
+
+    // --- primary sale: seat listing + purchase ---
+
+    /// @notice List named seats (e.g. "A-12") at a tier and face price. Buyers
+    ///         purchase directly on-chain via `buySeat`.
+    function listSeats(string[] calldata labels, uint16 tier, uint256 price)
+        external
+        onlyRole(ORGANIZER_ROLE)
+    {
+        for (uint256 i = 0; i < labels.length; i++) {
+            bytes32 key = keccak256(bytes(labels[i]));
+            require(!seatListing[key].active, "seat already listed");
+            seatListing[key] = SeatListing({tier: tier, price: price, active: true, tokenId: 0});
+            seatLabels.push(labels[i]);
+        }
+        emit SeatsListed(tier, price, labels.length);
+    }
+
+    /// @notice Buy a listed seat. Mints the ticket to the buyer and pays the
+    ///         organizer. Each seat sells exactly once on the primary market.
+    function buySeat(string calldata label) external payable returns (uint256 tokenId) {
+        SeatListing storage s = seatListing[keccak256(bytes(label))];
+        if (!s.active || s.tokenId != 0) revert SeatUnavailable();
+        if (msg.value != s.price) revert WrongPayment();
+
+        tokenId = _nextId++;
+        _tickets[tokenId] = Ticket({
+            tier: s.tier,
+            facePrice: s.price,
+            mintedAt: uint64(block.timestamp),
+            usedAt: 0,
+            lastSalePrice: s.price
+        });
+        s.tokenId = tokenId;
+        seatOf[tokenId] = label;
+        _safeMint(msg.sender, tokenId);
+
+        (bool ok,) = payable(organizer).call{value: msg.value}("");
+        require(ok, "organizer xfer failed");
+
+        emit SeatSold(label, tokenId, msg.sender, msg.value);
+        emit Minted(tokenId, msg.sender, s.tier, msg.value);
+    }
+
+    function seatCount() external view returns (uint256) {
+        return seatLabels.length;
+    }
+
+    function allSeats() external view returns (string[] memory) {
+        return seatLabels;
     }
 
     // --- restricted transfer ---

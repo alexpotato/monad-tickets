@@ -5,8 +5,11 @@ Last updated: 2026-06-10.
 ## What exists
 
 A working Foundry project under `contracts/` implementing the full design in
-[ARCHITECTURE.md](./ARCHITECTURE.md). All six contracts are implemented, 29
-tests pass, and the deploy script runs against a live anvil node.
+[ARCHITECTURE.md](./ARCHITECTURE.md) — six contracts, 33 passing tests, deploy
+script verified on anvil — plus a **demo web app under `web/`** (Vite + React +
+viem) with three surfaces: organizer dashboard (list seats, watch sales and
+check-ins), attendee phone simulator (buy seats, hold tickets, check in), and
+venue gate (rotating code + scanner). See `web/README.md` for the run book.
 
 ```
 contracts/
@@ -28,8 +31,15 @@ contracts/
     ResaleMarketplace.t.sol    4 tests
     TicketAuction.t.sol        6 tests
     E2E.t.sol                  1 full-lifecycle test
-  script/Deploy.s.sol
+  script/Deploy.s.sol          bare system deploy
+  script/Demo.s.sol            deploy + seed demo event with a 30-seat map
   foundry.toml                 solc 0.8.28, via_ir=true, OZ v5.1.0 remapped
+
+web/
+  src/lib/chain.ts             viem clients, ABIs, personas, check-in digest
+  src/lib/bus.ts               BroadcastChannel "QR scan" simulation
+  src/panes/{Organizer,Attendee,Gate}.tsx
+  scripts/e2e.mjs              headless run of the full UI flow (npm run e2e)
 ```
 
 ## Commands
@@ -37,8 +47,14 @@ contracts/
 ```bash
 cd contracts
 forge build
-forge test                                    # 29 tests, all passing
+forge test                                    # 33 tests, all passing
 forge test --match-path test/E2E.t.sol -vv    # full lifecycle
+
+# Demo web app (organizer + attendee phone + gate)
+anvil &
+forge script script/Demo.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+cd ../web && npm install && npm run dev       # http://localhost:5173
+npm run e2e                                   # headless UI-flow verification
 
 anvil &
 PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
@@ -98,13 +114,34 @@ PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
   organizer and the deployer (factory) so the factory can grant the auction
   `MARKET_ROLE` post-deploy.
 
+## Key facts about the demo web app (2026-06-10)
+
+- **Primary sale is now on-chain**: `TicketCollection.listSeats(labels, tier,
+  price)` (organizer) + `buySeat(label)` payable (buyer mints directly, pays
+  organizer). `seatOf(tokenId)` maps tickets to seat labels; `allSeats()`
+  enumerates for UIs.
+- Web app is dependency-light: react, react-dom, viem only. Hash routing
+  (`#/organizer`, `#/attendee`, `#/gate`; default = all three side by side).
+- Personas = anvil well-known accounts (no wallet extension): #0 admin,
+  #1 organizer, #2 gate, #3-5 attendees (Ava/Ben/Cleo). Keys hardcoded in
+  `web/src/lib/chain.ts` — fine, they're anvil's public dev keys.
+- Factory address `0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9` is deterministic
+  for a fresh anvil seeded by `Demo.s.sol` (account #0, fifth CREATE). The app
+  discovers everything else (collection, loyalty, stub) from the factory.
+- The check-in digest in JS (`checkInDigest` in chain.ts) must stay in lockstep
+  with `TicketCollection.checkIn`: keccak256(abi.encode(collection, chainid,
+  tokenId, nonce, keccak256(code))) signed via signMessage({raw}) = EIP-191.
+- QR hand-off simulated via BroadcastChannel (works same-page and cross-tab).
+  `npm run e2e` (web/scripts/e2e.mjs) drives the identical calls headlessly.
+
 ## Not yet built (per ARCHITECTURE.md)
 
 - Presale gating + tiered discounts at primary mint (registry read surface
-  exists; the gating logic in `TicketCollection.mintTo` is not wired yet —
-  `mintTo` currently takes an explicit price).
-- Indexer (`/indexer`), frontend (`/web`), gate app (`/gate`).
+  exists; seat prices are flat per listing — no score-based discount yet).
+- Indexer (`/indexer`); the web app reads chain state directly by polling.
 - Metadata / tokenURI (no IPFS hookup yet).
+- Resale/auction UI in the web app (contracts fully support it; demo covers
+  primary sale + check-in).
 - Event-cancellation / refund buyback flow.
 - Anti-sniping auto-extend on auctions.
 

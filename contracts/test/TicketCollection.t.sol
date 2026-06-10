@@ -11,6 +11,75 @@ contract TicketCollectionTest is Base {
         _deploySystem();
     }
 
+    // --- primary sale: seats ---
+
+    function _listSeats(TicketCollection c) internal {
+        string[] memory labels = new string[](3);
+        labels[0] = "A-1";
+        labels[1] = "A-2";
+        labels[2] = "A-3";
+        vm.prank(organizer);
+        c.listSeats(labels, 0, FACE);
+    }
+
+    function test_BuySeatMintsAndPaysOrganizer() public {
+        TicketCollection c = _createEvent();
+        _listSeats(c);
+        address fan = makeAddr("fan");
+        vm.deal(fan, FACE);
+
+        uint256 orgBefore = organizer.balance;
+        vm.prank(fan);
+        uint256 id = c.buySeat{value: FACE}("A-2");
+
+        assertEq(c.ownerOf(id), fan);
+        assertEq(c.seatOf(id), "A-2");
+        assertEq(c.ticket(id).facePrice, FACE);
+        assertEq(organizer.balance - orgBefore, FACE);
+        assertEq(c.seatCount(), 3);
+    }
+
+    function test_SeatSellsExactlyOnce() public {
+        TicketCollection c = _createEvent();
+        _listSeats(c);
+        address fan = makeAddr("fan");
+        address fan2 = makeAddr("fan2");
+        vm.deal(fan, FACE);
+        vm.deal(fan2, FACE);
+
+        vm.prank(fan);
+        c.buySeat{value: FACE}("A-1");
+
+        vm.prank(fan2);
+        vm.expectRevert(TicketCollection.SeatUnavailable.selector);
+        c.buySeat{value: FACE}("A-1");
+    }
+
+    function test_BuySeatWrongPaymentOrUnlistedReverts() public {
+        TicketCollection c = _createEvent();
+        _listSeats(c);
+        address fan = makeAddr("fan");
+        vm.deal(fan, FACE);
+
+        vm.prank(fan);
+        vm.expectRevert(TicketCollection.WrongPayment.selector);
+        c.buySeat{value: FACE - 1}("A-1");
+
+        vm.prank(fan);
+        vm.expectRevert(TicketCollection.SeatUnavailable.selector);
+        c.buySeat{value: FACE}("Z-99");
+    }
+
+    function test_OnlyOrganizerCanListSeats() public {
+        TicketCollection c = _createEvent();
+        string[] memory labels = new string[](1);
+        labels[0] = "A-1";
+        address rando = makeAddr("rando");
+        vm.prank(rando);
+        vm.expectRevert(); // missing ORGANIZER_ROLE
+        c.listSeats(labels, 0, FACE);
+    }
+
     // --- transfer restriction ---
 
     function test_OtcTransferReverts() public {

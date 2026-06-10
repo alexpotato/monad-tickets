@@ -1,0 +1,134 @@
+import { useEffect, useState } from "react";
+import { keccak256, toBytes } from "viem";
+import { PERSONAS, collectionAbi, publicClient, walletFor, type EventState } from "../lib/chain";
+import { onScan, announceResult, type ScanPayload } from "../lib/bus";
+import { usePoll } from "../lib/hooks";
+import { shortError } from "./Organizer";
+
+const WORDS = ["MOSH", "ENCORE", "STAGE", "RIFF", "DRUM", "AMP", "VERSE", "CHORD"];
+
+function randomCode() {
+  const word = WORDS[Math.floor(Math.random() * WORDS.length)];
+  const num = Math.floor(1000 + Math.random() * 9000);
+  return `${word}-${num}`;
+}
+
+type LogEntry = { ok: boolean; text: string; at: string };
+
+export function Gate({ state }: { state: EventState }) {
+  const [code, setCode] = useState<string | null>(() => sessionStorage.getItem("gate-code"));
+  const [busy, setBusy] = useState(false);
+  const [log, setLog] = useState<LogEntry[]>([]);
+
+  const { client: gateClient } = walletFor(PERSONAS.gate.key);
+
+  const [codeInfo] = usePoll(async () => {
+    const [setAt, validity] = await Promise.all([
+      publicClient.readContract({
+        address: state.collection, abi: collectionAbi, functionName: "codeSetAt",
+      }),
+      publicClient.readContract({
+        address: state.collection, abi: collectionAbi, functionName: "codeValidity",
+      }),
+    ]);
+    return { setAt, validity };
+  });
+
+  function addLog(ok: boolean, text: string) {
+    setLog((l) => [{ ok, text, at: new Date().toLocaleTimeString() }, ...l].slice(0, 30));
+  }
+
+  async function rotate() {
+    setBusy(true);
+    try {
+      const next = randomCode();
+      // Only the hash goes on-chain; the plaintext lives on the venue screens.
+      await gateClient.writeContract({
+        address: state.collection,
+        abi: collectionAbi,
+        functionName: "setGateCode",
+        args: [keccak256(toBytes(next))],
+      });
+      setCode(next);
+      sessionStorage.setItem("gate-code", next);
+      addLog(true, `Code rotated → ${next}`);
+    } catch (e) {
+      addLog(false, `Rotate failed: ${shortError(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Receive "QR scans" from the attendee phone and submit check-in on-chain.
+  // The gate pays the gas — check-in is free for the attendee.
+  useEffect(() => {
+    return onScan(async (p: ScanPayload) => {
+      addLog(true, `Scanned pass: seat ${p.seat} (token #${p.tokenId}) from ${p.holder.slice(0, 8)}…`);
+      try {
+        const hash = await gateClient.writeContract({
+          address: state.collection,
+          abi: collectionAbi,
+          functionName: "checkIn",
+          args: [BigInt(p.tokenId), p.code, p.sig as `0x${string}`],
+        });
+        await publicClient.waitForTransactionReceipt({ hash });
+        addLog(true, `✓ Welcome! Seat ${p.seat} checked in — ticket returned to event wallet, stub minted.`);
+        announceResult({
+          tokenId: p.tokenId,
+          ok: true,
+          message: `✓ Checked in! Seat ${p.seat} swapped for a souvenir stub. Enjoy the show.`,
+        });
+      } catch (e) {
+        const reason = shortError(e);
+        addLog(false, `✗ Rejected seat ${p.seat}: ${reason}`);
+        announceResult({
+          tokenId: p.tokenId,
+          ok: false,
+          message: `✗ Gate rejected your pass: ${reason}`,
+        });
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.collection]);
+
+  const remaining = codeInfo
+    ? Math.max(0, Number(codeInfo.setAt) + Number(codeInfo.validity) - Math.floor(Date.now() / 1000))
+    : null;
+
+  return (
+    <div>
+      <div className="card gatecode">
+        <p className="sub">VENUE SCREENS — TYPE THIS CODE IN YOUR APP</p>
+        <div className="code">{code ?? "— — — —"}</div>
+        <div className="ttl">
+          {code === null
+            ? "No code yet — rotate to start admitting"
+            : remaining !== null
+              ? remaining > 0
+                ? `expires in ${Math.floor(remaining / 60)}m ${remaining % 60}s`
+                : "EXPIRED — rotate"
+              : ""}
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <button className="primary" onClick={rotate} disabled={busy}>
+            {busy ? "Committing hash on-chain…" : "Rotate venue code"}
+          </button>
+        </div>
+      </div>
+
+      <div className="card">
+        <h4>Scanner feed</h4>
+        <p className="sub">
+          Waiting for passes… (attendee signs on their phone; this device submits and pays gas)
+        </p>
+        <div className="scanlog">
+          {log.map((e, i) => (
+            <div key={i} className={`scanentry ${e.ok ? "ok" : "err"}`}>
+              <span className="mono">{e.at}</span> {e.text}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

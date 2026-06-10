@@ -5,6 +5,11 @@ contracts/cache/
 # Local deploy/broadcast logs (anvil runs, tx receipts)
 contracts/broadcast/
 
+# Web app
+web/node_modules/
+web/dist/
+
 # Secrets
 .env
 .env.*
+web/tsconfig.tsbuildinfo
