@@ -22,7 +22,13 @@ export const PROFILE: ChainProfile = activeProfile();
 // requests but accept as a couple of batches.
 const transport = http(PROFILE.rpcUrl, { batch: { wait: 100 } });
 
-export const publicClient = createPublicClient({ chain: PROFILE.chain, transport });
+// pollingInterval drives waitForTransactionReceipt; Monad blocks are sub-second
+// so viem's 4s default adds pointless latency to every confirmed action.
+export const publicClient = createPublicClient({
+  chain: PROFILE.chain,
+  transport,
+  pollingInterval: 1_000,
+});
 
 export const POLL_MS = PROFILE.pollMs;
 

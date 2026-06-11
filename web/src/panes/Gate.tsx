@@ -93,7 +93,7 @@ export function Gate({ state, refresh }: { state: EventState; refresh: () => voi
     return run;
   }
 
-  const [codeInfo] = usePoll(async () => {
+  const [codeInfo, refreshCodeInfo] = usePoll(async () => {
     const [setAt, validity, onChainHash] = await Promise.all([
       publicClient.readContract({
         address: state.collection, abi: collectionAbi, functionName: "codeSetAt",
@@ -124,16 +124,20 @@ export function Gate({ state, refresh }: { state: EventState; refresh: () => voi
     try {
       const next = randomCode();
       // Only the hash goes on-chain; the plaintext lives on the venue screens.
-      await enqueue(() =>
-        gateClient.writeContract({
+      // Wait for the receipt, then re-read the on-chain hash immediately —
+      // otherwise the display sits on "— — — —" until the next slow poll.
+      await enqueue(async () => {
+        const hash = await gateClient.writeContract({
           address: state.collection,
           abi: collectionAbi,
           functionName: "setGateCode",
           args: [keccak256(toBytes(next))],
-        }),
-      );
+        });
+        await publicClient.waitForTransactionReceipt({ hash });
+      });
       setCode(next);
       localStorage.setItem("gate-code", next);
+      refreshCodeInfo();
       addLog(true, `Code rotated → ${next}`);
     } catch (e) {
       addLog(false, `Rotate failed: ${shortError(e)}`);
