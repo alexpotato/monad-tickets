@@ -1,6 +1,7 @@
 import {
   createPublicClient,
   createWalletClient,
+  custom,
   http,
   parseAbi,
   parseEther,
@@ -17,10 +18,56 @@ import { activeProfile, deviceWalletKey, type ChainProfile } from "./profiles";
 
 export const PROFILE: ChainProfile = activeProfile();
 
-// batch: true folds concurrent reads into JSON-RPC batch requests — the
-// seat-map poll is ~100 calls, which public RPCs rate-limit as individual
-// requests but accept as a couple of batches.
-const transport = http(PROFILE.rpcUrl, { batch: { wait: 100 } });
+// The public testnet RPC enforces "15 requests/sec" per IP (error -32011; some
+// gateways answer 429). batch:{wait} already folds concurrent reads into a few
+// JSON-RPC batch POSTs, but several panes polling at once (App's seat-map poll
+// + Company's stub roster + balance reads) can still spike past the ceiling and
+// fail a whole load — which surfaces as "chain unreachable". Wrap the HTTP
+// transport so that (1) outgoing requests pass through a single app-wide queue
+// with a minimum gap, and (2) a rate-limit error waits and retries instead of
+// bubbling up. Anvil is unlimited, so the gap is 0 and retries never trigger.
+const MIN_REQUEST_GAP_MS = PROFILE.id === "testnet" ? 90 : 0;
+
+function isRateLimit(e: unknown): boolean {
+  const s = String((e as Error)?.message ?? e);
+  return s.includes("-32011") || s.includes("limited to") || s.includes("429") || s.includes("rate");
+}
+
+function throttledTransport() {
+  // Keep JSON-RPC batching ON (multicall + a single eth_call still go as one
+  // POST) but serialize the *POSTs themselves* through one global queue: each
+  // waits for the previous to finish, then for a fixed gap, before sending.
+  // ~90ms gap → ≤11 POST/s, safely under the 15/s cap, no matter how many
+  // panes poll. A rate-limit response still retries with backoff as a belt.
+  const inner = http(PROFILE.rpcUrl, { batch: { wait: 120 } })({ chain: PROFILE.chain });
+  let queue: Promise<unknown> = Promise.resolve();
+
+  async function send(args: unknown): Promise<unknown> {
+    for (let attempt = 0; ; attempt++) {
+      if (MIN_REQUEST_GAP_MS) await new Promise((r) => setTimeout(r, MIN_REQUEST_GAP_MS));
+      try {
+        return await inner.request(args as never);
+      } catch (e) {
+        if (isRateLimit(e) && attempt < 6) {
+          await new Promise((r) => setTimeout(r, 300 * 2 ** attempt));
+          continue;
+        }
+        throw e;
+      }
+    }
+  }
+
+  return custom({
+    request(args) {
+      // chain onto the queue; failures don't poison the queue for the next caller
+      const result = queue.then(() => send(args));
+      queue = result.catch(() => undefined);
+      return result as never;
+    },
+  });
+}
+
+const transport = throttledTransport();
 
 // pollingInterval drives waitForTransactionReceipt; Monad blocks are sub-second
 // so viem's 4s default adds pointless latency to every confirmed action.
