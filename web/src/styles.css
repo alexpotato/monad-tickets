@@ -136,3 +136,10 @@ input, select {
   .threepane { grid-template-columns: 1fr; }
   .phone { width: min(384px, 94vw); }
 }
+
+/* company roster */
+table.rostr { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rostr th { text-align: left; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 8px; border-bottom: 1px solid #232a42; }
+.rostr td { padding: 9px 8px; border-bottom: 1px solid #1c2236; }
+.rostr td.neg { color: var(--bad); }
+.youtag { background: var(--accent); color: #fff; font-size: 10px; border-radius: 6px; padding: 1px 6px; margin-left: 6px; font-family: -apple-system, sans-serif; }

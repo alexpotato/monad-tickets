@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { Organizer } from "./panes/Organizer";
 import { Attendee } from "./panes/Attendee";
 import { Gate } from "./panes/Gate";
+import { Company } from "./panes/Company";
 import { loadEventState, PROFILE, POLL_MS } from "./lib/chain";
 import { PROFILES, switchProfile } from "./lib/profiles";
 import { usePoll } from "./lib/hooks";
 
-type Route = "demo" | "organizer" | "attendee" | "gate";
+type Route = "demo" | "organizer" | "attendee" | "gate" | "company";
 
 // The default URL IS the wallet app. Operator surfaces live at their own
 // URLs: #/admin (organizer dashboard), #/gate (venue gate), #/demo (the
@@ -16,6 +17,7 @@ function routeFromHash(): Route {
   if (h === "admin" || h === "organizer") return "organizer";
   if (h === "gate") return "gate";
   if (h === "demo") return "demo";
+  if (h === "company") return "company";
   return "attendee";
 }
 
@@ -97,6 +99,7 @@ export default function App() {
           <nav>
             <a href="#/demo" className={route === "demo" ? "active" : ""}>Demo</a>
             <a href="#/admin" className={route === "organizer" ? "active" : ""}>Admin</a>
+            <a href="#/company" className={route === "company" ? "active" : ""}>Company</a>
             <a href="#/gate" className={route === "gate" ? "active" : ""}>Gate</a>
           </nav>
         )}
@@ -110,6 +113,7 @@ export default function App() {
         </div>
       )}
       {route === "organizer" && <div className="single"><Organizer state={state} refresh={refresh} /></div>}
+      {route === "company" && <div className="single"><Company state={state} /></div>}
       {route === "attendee" && <div className="single"><Attendee state={state} refresh={refresh} /></div>}
       {route === "gate" && <div className="single"><Gate state={state} refresh={refresh} /></div>}
     </div>
