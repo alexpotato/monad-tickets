@@ -26,10 +26,8 @@ export const PROFILE: ChainProfile = activeProfile();
 // transport so that (1) outgoing requests pass through a single app-wide queue
 // with a minimum gap, and (2) a rate-limit error waits and retries instead of
 // bubbling up. Anvil is unlimited, so the gap is 0 and retries never trigger.
-// The dedicated testnet RPC has no burst cap, so no gap is needed; the
-// retry-on-rate-limit below stays as a harmless safety net if the endpoint
-// ever changes. (The old public endpoint needed ~90ms here.)
-const MIN_REQUEST_GAP_MS = 0;
+// The public testnet RPC enforces ~15 requests/sec/IP, so space POSTs out.
+const MIN_REQUEST_GAP_MS = PROFILE.id === "testnet" ? 90 : 0;
 
 function isRateLimit(e: unknown): boolean {
   const s = String((e as Error)?.message ?? e);
