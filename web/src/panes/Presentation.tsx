@@ -155,7 +155,26 @@ function buildSlides(state?: EventState) {
       </p>
     </section>,
 
-    // 7 — the flywheel
+    // 7 — hardening roadmap: the NFC gate
+    <section key="nfc">
+      <h2>Hardening: the NFC gate</h2>
+      <p className="big">
+        The strongest KYC-free presence proof — NFC's <em>centimeter</em> range
+        <span className="accent"> physically can't be relayed</span> to someone at home.
+      </p>
+      <ol>
+        <li>A dedicated reader at the door (PN532 / ACR122) writes a <strong>fresh one-time challenge</strong> to the tap.</li>
+        <li>The fan's phone reads it and <strong>signs</strong> — wallet control, bound to that exact challenge. The key never leaves the phone.</li>
+        <li>The gate <strong>co-signs what it physically read</strong> and submits on-chain.</li>
+      </ol>
+      <p className="big accent">
+        Leaked code? Useless. Pre-signed from home? Stale. Relayed? The tap had to happen
+        at the door.
+      </p>
+      <p className="sub2">Three signatures, one tap: the phone (control), the gate (presence), the chain (record).</p>
+    </section>,
+
+    // 8 — the flywheel
     <section key="f">
       <h2>The loyalty flywheel</h2>
       <ul>
@@ -169,7 +188,7 @@ function buildSlides(state?: EventState) {
       </ul>
     </section>,
 
-    // 8 — resale, civilized
+    // 9 — resale, civilized
     <section key="r">
       <h2>Resale, civilized — not banned</h2>
       <ul>
@@ -180,7 +199,7 @@ function buildSlides(state?: EventState) {
       </ul>
     </section>,
 
-    // 9 — live data
+    // 10 — live data
     <section key="l">
       <h2>The receipts — live from chain, right now</h2>
       <LiveRoster state={state} />
@@ -190,7 +209,7 @@ function buildSlides(state?: EventState) {
       </p>
     </section>,
 
-    // 10 — why monad
+    // 11 — why monad
     <section key="m">
       <h2>Why Monad</h2>
       <ul>
@@ -201,7 +220,7 @@ function buildSlides(state?: EventState) {
       </ul>
     </section>,
 
-    // 11 — try it
+    // 12 — try it
     <section key="x" className="center">
       <h2>Try it now</h2>
       <p className="big mono2">alexpotato.github.io/monad-tickets</p>
