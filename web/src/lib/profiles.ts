@@ -21,6 +21,9 @@ export type RoleKeys = {
   organizer: { name: string; key: Hex };
   gate: { name: string; key: Hex };
   attendees: { name: string; key: Hex }[]; // pre-funded personas (local only)
+  // Shared, pre-funded "sponsor" wallet behind the Get-funds button (testnet
+  // only; on anvil the device wallet auto-funds via cheatcode instead).
+  sponsor?: { name: string; key: Hex };
 };
 
 export type ChainProfile = {
@@ -94,6 +97,10 @@ export const PROFILES: Record<"local" | "testnet", ChainProfile> = {
         key: "0xe1cf09908e2a03578b2b73bb225c720ba43fe00312c9d005b8cf337eb5b58dbd",
       },
       attendees: [], // on testnet, attendees use the per-device wallet
+      sponsor: {
+        name: "Demo Sponsor",
+        key: "0x8621db44fe63c1e243c07da91197e5a5270b6d4359a8aa65c7c68bbd5c2ad8bc",
+      },
     },
   },
 };

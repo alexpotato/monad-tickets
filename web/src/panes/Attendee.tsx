@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { formatEther } from "viem";
+import { formatEther, parseEther } from "viem";
 import {
   PERSONAS,
   PROFILE,
@@ -66,7 +66,31 @@ export function Attendee({ state }: { state: EventState }) {
     }
   }, [profile?.balance, account.address]);
 
-  const needsFaucet = profile?.balance === 0n && !PROFILE.canAutoFund;
+  const needsFunds = profile?.balance === 0n && !PROFILE.canAutoFund;
+  const [funding, setFunding] = useState(false);
+
+  // "Get funds": the shared demo sponsor (a pre-funded, intentionally public
+  // testnet key, same spirit as the gate/organizer roles) sends the device
+  // wallet a couple of MON — signed entirely client-side, no backend.
+  async function getFunds() {
+    const sponsor = PROFILE.roles.sponsor;
+    if (!sponsor) return;
+    setFunding(true);
+    setMsg(null);
+    try {
+      const { client: sponsorClient } = walletFor(sponsor.key);
+      const hash = await sponsorClient.sendTransaction({
+        to: account.address,
+        value: parseEther("2"),
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+      setMsg({ kind: "ok", text: "2 MON sent by the demo sponsor — happy seat shopping!" });
+    } catch (e) {
+      setMsg({ kind: "err", text: `Sponsor transfer failed: ${shortError(e)}` });
+    } finally {
+      setFunding(false);
+    }
+  }
 
   const myTickets = state.seats.filter(
     (s) => s.tokenId !== 0n && s.owner?.toLowerCase() === account.address.toLowerCase() && !s.used,
@@ -164,26 +188,31 @@ export function Attendee({ state }: { state: EventState }) {
           <button className={tab === "profile" ? "active" : ""} onClick={() => setTab("profile")}>Profile</button>
         </div>
 
-        {needsFaucet && (
+        {needsFunds && (
           <div className="msg info">
-            This wallet needs testnet MON to buy seats. Send some to{" "}
-            <span
-              className="mono"
-              style={{ cursor: "pointer", textDecoration: "underline" }}
-              title="Tap to copy"
-              onClick={() => navigator.clipboard.writeText(account.address)}
-            >
-              {account.address.slice(0, 10)}…{account.address.slice(-6)}
-            </span>{" "}
-            {PROFILE.faucet && (
+            {PROFILE.roles.sponsor ? (
               <>
-                via the{" "}
-                <a href={PROFILE.faucet} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
-                  faucet
-                </a>
+                <p style={{ margin: "0 0 8px" }}>
+                  This wallet needs a little testnet MON to buy seats (check-in is free).
+                </p>
+                <button className="primary" onClick={getFunds} disabled={funding}>
+                  {funding ? "Sending…" : "Get 2 MON (free, from the demo sponsor)"}
+                </button>
+              </>
+            ) : (
+              <>
+                This wallet needs testnet MON to buy seats. Send some to{" "}
+                <span
+                  className="mono"
+                  style={{ cursor: "pointer", textDecoration: "underline" }}
+                  title="Tap to copy"
+                  onClick={() => navigator.clipboard.writeText(account.address)}
+                >
+                  {account.address.slice(0, 10)}…{account.address.slice(-6)}
+                </span>
+                . Check-in itself is free.
               </>
             )}
-            . Check-in itself is free.
           </div>
         )}
 
