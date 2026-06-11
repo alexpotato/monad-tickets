@@ -52,16 +52,16 @@ console.log("PART A — hosted PWA (mobile emulation: iPhone 13)");
   });
   step(sw?.active === true, `service worker active (scope ${sw?.scope})`);
 
-  // Default profile on hosted = testnet → not-deployed notice
+  // Default profile on hosted = testnet → live event loads from chain 10143
+  await page.waitForSelector(".seat", { timeout: 40000 });
   const bodyText = await page.textContent("body");
-  step(/Monad testnet/i.test(bodyText), "defaults to Monad testnet profile");
-  step(/aren't deployed|not deployed/i.test(bodyText), "shows contracts-not-deployed notice");
-  await page.screenshot({ path: `${SHOTS}/a1-hosted-testnet-notice.png` });
+  step(/Monad Live: Block Party/.test(bodyText), "loads the live testnet event");
+  step((await page.$$(".seat")).length >= 30, "renders the testnet seat map");
+  await page.screenshot({ path: `${SHOTS}/a1-hosted-testnet-live.png` });
 
-  // Probe: switch profile to local anvil FROM the HTTPS page. Loopback is
-  // exempt from mixed-content blocking in Chromium, so this should load the
-  // real local chain.
-  await page.selectOption("select", "local");
+  // Probe: switch profile to local anvil FROM the HTTPS page (PNA blocks the
+  // localhost RPC, so the app should degrade to the not-ready screen).
+  await page.selectOption(".topbar select", "local");
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(3000);
   const afterSwitch = await page.textContent("body");
