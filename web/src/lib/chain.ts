@@ -3,46 +3,56 @@ import {
   createWalletClient,
   http,
   parseAbi,
+  parseEther,
   keccak256,
   toBytes,
+  toHex,
   encodeAbiParameters,
   encodePacked,
   type Address,
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { foundry } from "viem/chains";
+import { activeProfile, deviceWalletKey, type ChainProfile } from "./profiles";
 
-export const RPC_URL = "http://127.0.0.1:8545";
-// Deterministic on a fresh anvil node seeded with contracts/script/Demo.s.sol.
-export const FACTORY_ADDRESS: Address = "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9";
+export const PROFILE: ChainProfile = activeProfile();
 
-export const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
+export const publicClient = createPublicClient({
+  chain: PROFILE.chain,
+  transport: http(PROFILE.rpcUrl),
+});
 
 export function walletFor(privateKey: Hex) {
   const account = privateKeyToAccount(privateKey);
   return {
     account,
-    client: createWalletClient({ account, chain: foundry, transport: http(RPC_URL) }),
+    client: createWalletClient({ account, chain: PROFILE.chain, transport: http(PROFILE.rpcUrl) }),
   };
 }
 
-// anvil's well-known accounts, used as demo personas
+// Demo personas for the active profile. The device wallet ("This phone") is
+// always first — it's the realistic "you" account on a real phone; on local
+// anvil the pre-funded named personas follow for multi-user demos.
 export const PERSONAS = {
-  organizer: {
-    name: "Olivia (Organizer)",
-    key: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" as Hex,
-  },
-  gate: {
-    name: "Gate Device",
-    key: "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a" as Hex,
-  },
+  organizer: PROFILE.roles.organizer,
+  gate: PROFILE.roles.gate,
   attendees: [
-    { name: "Ava", key: "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6" as Hex },
-    { name: "Ben", key: "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a" as Hex },
-    { name: "Cleo", key: "0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba" as Hex },
+    { name: "This phone", key: deviceWalletKey() },
+    ...PROFILE.roles.attendees,
   ],
 };
+
+/// On anvil we can conjure balance for the freshly-generated device wallet so
+/// "This phone" works with zero setup. On testnet the faucet banner handles it.
+export async function autoFundIfPossible(address: Address): Promise<boolean> {
+  if (!PROFILE.canAutoFund) return false;
+  await publicClient.request({
+    // anvil-only cheatcode
+    method: "anvil_setBalance" as never,
+    params: [address, toHex(parseEther("10"))] as never,
+  });
+  return true;
+}
 
 export const factoryAbi = parseAbi([
   "function events(uint256) view returns (address)",
@@ -108,7 +118,7 @@ export function checkInDigest(
         { type: "uint256" },
         { type: "bytes32" },
       ],
-      [collection, BigInt(foundry.id), tokenId, nonce, keccak256(toBytes(code))],
+      [collection, BigInt(PROFILE.chain.id), tokenId, nonce, keccak256(toBytes(code))],
     ),
   );
 }
@@ -133,7 +143,7 @@ export function batchCheckInDigest(
       ],
       [
         collection,
-        BigInt(foundry.id),
+        BigInt(PROFILE.chain.id),
         keccak256(encodePacked(["uint256[]"], [tokenIds])),
         nonce,
         keccak256(toBytes(code)),
@@ -165,9 +175,10 @@ export type EventState = {
 /// One polling read of everything the panes need. Demo-scale (tens of seats),
 /// so plain parallel eth_calls are fine.
 export async function loadEventState(): Promise<EventState | null> {
+  if (PROFILE.factory === null) return null; // not deployed on this chain yet
   try {
     const collection = await publicClient.readContract({
-      address: FACTORY_ADDRESS,
+      address: PROFILE.factory,
       abi: factoryAbi,
       functionName: "events",
       args: [0n],

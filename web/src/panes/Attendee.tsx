@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { formatEther } from "viem";
 import {
   PERSONAS,
+  PROFILE,
+  autoFundIfPossible,
   collectionAbi,
   loyaltyAbi,
   stubAbi,
@@ -54,6 +56,16 @@ export function Attendee({ state }: { state: EventState }) {
     () => onResult((r) => setMsg({ kind: r.ok ? "ok" : "err", text: r.message })),
     [],
   );
+
+  // A freshly-generated device wallet has zero balance. On anvil, conjure
+  // funds automatically; on testnet, the faucet banner below takes over.
+  useEffect(() => {
+    if (profile?.balance === 0n && PROFILE.canAutoFund) {
+      autoFundIfPossible(account.address);
+    }
+  }, [profile?.balance, account.address]);
+
+  const needsFaucet = profile?.balance === 0n && !PROFILE.canAutoFund;
 
   const myTickets = state.seats.filter(
     (s) => s.tokenId !== 0n && s.owner?.toLowerCase() === account.address.toLowerCase() && !s.used,
@@ -150,6 +162,29 @@ export function Attendee({ state }: { state: EventState }) {
           </button>
           <button className={tab === "profile" ? "active" : ""} onClick={() => setTab("profile")}>Profile</button>
         </div>
+
+        {needsFaucet && (
+          <div className="msg info">
+            This wallet needs testnet MON to buy seats. Send some to{" "}
+            <span
+              className="mono"
+              style={{ cursor: "pointer", textDecoration: "underline" }}
+              title="Tap to copy"
+              onClick={() => navigator.clipboard.writeText(account.address)}
+            >
+              {account.address.slice(0, 10)}…{account.address.slice(-6)}
+            </span>{" "}
+            {PROFILE.faucet && (
+              <>
+                via the{" "}
+                <a href={PROFILE.faucet} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
+                  faucet
+                </a>
+              </>
+            )}
+            . Check-in itself is free.
+          </div>
+        )}
 
         {msg && <div className={`msg ${msg.kind}`}>{msg.text}</div>}
 

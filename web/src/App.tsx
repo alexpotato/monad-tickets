@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Organizer } from "./panes/Organizer";
 import { Attendee } from "./panes/Attendee";
 import { Gate } from "./panes/Gate";
-import { loadEventState } from "./lib/chain";
+import { loadEventState, PROFILE } from "./lib/chain";
+import { PROFILES, switchProfile } from "./lib/profiles";
 import { usePoll } from "./lib/hooks";
 
 type Route = "all" | "organizer" | "attendee" | "gate";
@@ -10,7 +11,24 @@ type Route = "all" | "organizer" | "attendee" | "gate";
 function routeFromHash(): Route {
   const h = window.location.hash.replace("#/", "");
   if (h === "organizer" || h === "attendee" || h === "gate") return h;
-  return "all";
+  // On a phone (or installed PWA) the attendee experience IS the app;
+  // the side-by-side control room only makes sense on a big screen.
+  return window.matchMedia("(max-width: 800px)").matches ? "attendee" : "all";
+}
+
+function ProfileSwitch() {
+  return (
+    <select
+      value={PROFILE.id}
+      onChange={(e) => switchProfile(e.target.value as "local" | "testnet")}
+      style={{ width: "auto", padding: "6px 10px", fontSize: 13 }}
+      title="Which chain this app talks to"
+    >
+      {Object.values(PROFILES).map((p) => (
+        <option key={p.id} value={p.id}>{p.label}</option>
+      ))}
+    </select>
+  );
 }
 
 export default function App() {
@@ -23,16 +41,30 @@ export default function App() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  if (state === undefined) return <div className="boot">Connecting to anvil…</div>;
+  if (state === undefined) {
+    return <div className="boot">Connecting to {PROFILE.label}…</div>;
+  }
   if (state === null) {
     return (
       <div className="boot">
-        <h2>Chain not ready</h2>
-        <p>Start the local chain and seed the demo:</p>
-        <pre>
-          anvil{"\n"}cd contracts{"\n"}forge script script/Demo.s.sol --rpc-url
-          http://127.0.0.1:8545 --broadcast
-        </pre>
+        <h2>{PROFILE.label}: chain not ready</h2>
+        {PROFILE.id === "local" ? (
+          <>
+            <p>Start the local chain and seed the demo:</p>
+            <pre>
+              anvil{"\n"}cd contracts{"\n"}forge script script/Demo.s.sol --rpc-url
+              http://127.0.0.1:8545 --broadcast
+            </pre>
+          </>
+        ) : (
+          <p>
+            The contracts aren't deployed to Monad testnet yet — see TESTNET.md in the repo
+            for the deploy runbook.
+          </p>
+        )}
+        <p style={{ marginTop: 16 }}>
+          <ProfileSwitch />
+        </p>
       </div>
     );
   }
@@ -47,6 +79,7 @@ export default function App() {
           <a href="#/attendee" className={route === "attendee" ? "active" : ""}>Attendee</a>
           <a href="#/gate" className={route === "gate" ? "active" : ""}>Gate</a>
         </nav>
+        <ProfileSwitch />
       </header>
       {route === "all" && (
         <div className="threepane">
