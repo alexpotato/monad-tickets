@@ -31,12 +31,19 @@ export type ChainProfile = {
   roles: RoleKeys;
 };
 
+// When the dev server is opened from another device on the LAN
+// (http://<laptop-ip>:5173), anvil lives on that same laptop — point the RPC
+// at the page's host instead of the phone's own loopback. Hosted (HTTPS)
+// pages keep 127.0.0.1 (browsers block them from private networks anyway).
+const localRpcHost =
+  window.location.protocol === "http:" ? window.location.hostname : "127.0.0.1";
+
 export const PROFILES: Record<"local" | "testnet", ChainProfile> = {
   local: {
     id: "local",
     label: "Local anvil",
     chain: foundry,
-    rpcUrl: "http://127.0.0.1:8545",
+    rpcUrl: `http://${localRpcHost}:8545`,
     // Deterministic on a fresh anvil seeded with contracts/script/Demo.s.sol.
     factory: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
     canAutoFund: true,
