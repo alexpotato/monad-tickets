@@ -55,6 +55,20 @@ export default function App() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
+  // Per-route tab title so multiple open tabs (Admin / Gate / Company / …) are
+  // tellable apart at a glance.
+  useEffect(() => {
+    const titles: Record<Route, string> = {
+      attendee: "🎫 Tickets",
+      organizer: "🛠 Admin",
+      gate: "🚪 Gate",
+      company: "📊 Company",
+      demo: "🖥 Demo",
+      presentation: "📽 Slides",
+    };
+    document.title = `${titles[route]} · Monad Tickets`;
+  }, [route]);
+
   if (route === "presentation") {
     return <Presentation state={state} />;
   }
