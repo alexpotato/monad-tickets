@@ -2,8 +2,8 @@ import { formatEther, type Address } from "viem";
 import {
   PROFILE,
   POLL_MS,
+  loadStubs,
   loyaltyAbi,
-  stubAbi,
   publicClient,
   type EventState,
 } from "../lib/chain";
@@ -25,15 +25,12 @@ export function Company({ state }: { state: EventState }) {
   const me = deviceWalletAddress().toLowerCase();
 
   const [rows] = usePoll(async () => {
-    // Attendance: every StubMinted since the factory deploy.
-    const logs = await publicClient.getLogs({
-      address: state.stub,
-      event: stubAbi[2],
-      fromBlock: PROFILE.fromBlock,
-    });
+    // Attendance: enumerate the soulbound stubs (logs are unusable on the
+    // public RPC — see loadStubs).
+    const stubs = await loadStubs(state.stub);
     const stubsBy = new Map<string, number>();
-    for (const l of logs) {
-      const to = (l.args.to as Address).toLowerCase();
+    for (const s of stubs) {
+      const to = s.owner.toLowerCase();
       stubsBy.set(to, (stubsBy.get(to) ?? 0) + 1);
     }
 

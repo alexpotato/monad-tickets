@@ -6,6 +6,7 @@ import {
   POLL_MS,
   autoFundIfPossible,
   collectionAbi,
+  loadStubs,
   loyaltyAbi,
   stubAbi,
   batchCheckInDigest,
@@ -351,16 +352,8 @@ function Profile({
   stubCount?: bigint;
 }) {
   const [stubs] = usePoll(async () => {
-    const logs = await publicClient.getLogs({
-      address: state.stub,
-      event: stubAbi[2],
-      args: { to: address },
-      fromBlock: PROFILE.fromBlock,
-    });
-    return logs.map((l) => ({
-      stubId: l.args.stubId!,
-      ticketId: l.args.ticketId!,
-    }));
+    const all = await loadStubs(state.stub);
+    return all.filter((s) => s.owner.toLowerCase() === address.toLowerCase());
   }, POLL_MS);
 
   return (

@@ -106,9 +106,60 @@ export const loyaltyAbi = parseAbi([
 
 export const stubAbi = parseAbi([
   "function balanceOf(address) view returns (uint256)",
+  "function ownerOf(uint256) view returns (address)",
   "function provenance(uint256) view returns (address collection, uint256 ticketId, uint64 attendedAt)",
   "event StubMinted(uint256 indexed stubId, address indexed to, address indexed collection, uint256 ticketId)",
 ]);
+
+export type StubInfo = { stubId: bigint; owner: Address; ticketId: bigint };
+
+/// Enumerate every minted stub — the attendance ledger — WITHOUT logs.
+/// (The public testnet RPC caps eth_getLogs to 100 blocks, useless for
+/// history.) Stub ids are sequential from 1, so probe ownerOf/provenance in
+/// chunks: one Multicall3 eth_call per 25 ids on testnet, a batch on anvil;
+/// stop at the first nonexistent id.
+export async function loadStubs(stubAddr: Address): Promise<StubInfo[]> {
+  const out: StubInfo[] = [];
+  const CHUNK = 25;
+  for (let start = 1; start < 2000; start += CHUNK) {
+    const ids = Array.from({ length: CHUNK }, (_, i) => BigInt(start + i));
+    const contracts = ids.flatMap((id) => [
+      { address: stubAddr, abi: stubAbi, functionName: "ownerOf", args: [id] },
+      { address: stubAddr, abi: stubAbi, functionName: "provenance", args: [id] },
+    ]);
+    type R = { status: "success" | "failure"; result?: unknown };
+    let results: R[];
+    if (PROFILE.chain.contracts?.multicall3) {
+      results = (await publicClient.multicall({
+        contracts: contracts as never,
+        allowFailure: true,
+      })) as R[];
+    } else {
+      results = await Promise.all(
+        contracts.map((c) =>
+          (publicClient.readContract(c as never) as Promise<unknown>).then(
+            (result) => ({ status: "success" as const, result }),
+            () => ({ status: "failure" as const }),
+          ),
+        ),
+      );
+    }
+    let sawGap = false;
+    for (let i = 0; i < ids.length; i++) {
+      const owner = results[i * 2];
+      const prov = results[i * 2 + 1];
+      if (owner.status === "success") {
+        const [, ticketId] = prov.result as [Address, bigint, bigint];
+        out.push({ stubId: ids[i], owner: owner.result as Address, ticketId });
+      } else {
+        sawGap = true;
+        break;
+      }
+    }
+    if (sawGap) break;
+  }
+  return out;
+}
 
 /// Build the exact digest TicketCollection.checkIn verifies, pre-EIP-191.
 /// signMessage({ raw }) applies the "\x19Ethereum Signed Message:\n32" prefix,
