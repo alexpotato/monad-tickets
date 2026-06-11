@@ -196,55 +196,80 @@ export async function loadEventState(): Promise<LoadResult> {
         functionName: "events",
         args: [0n],
       });
-      const readC = <T,>(functionName: string) =>
-        publicClient.readContract({
-          address: collection,
-          abi: collectionAbi,
-          functionName,
-        } as never) as Promise<T>;
-      const [name, organizer, loyalty, stub, eventStartTime, resaleCap] = await Promise.all([
-        readC<string>("name"),
-        readC<Address>("organizer"),
-        readC<Address>("loyalty"),
-        readC<Address>("stub"),
-        readC<bigint>("eventStartTime"),
-        readC<bigint>("resaleCap"),
-      ]);
+      const [name, organizer, loyalty, stub, eventStartTime, resaleCap] = (await readAll(
+        collection,
+        [
+          ["name", []],
+          ["organizer", []],
+          ["loyalty", []],
+          ["stub", []],
+          ["eventStartTime", []],
+          ["resaleCap", []],
+        ],
+      )) as [string, Address, Address, Address, bigint, bigint];
       statics = { collection, name, organizer, loyalty, stub, eventStartTime, resaleCap };
     }
     const collection = statics.collection;
-    const read = <T,>(functionName: string, args: unknown[] = []) =>
-      publicClient.readContract({
-        address: collection,
-        abi: collectionAbi,
-        functionName,
-        args,
-      } as never) as Promise<T>;
+    const labels = await readAll<string[]>(collection, [["allSeats", []]]).then((r) => r[0]);
 
-    const labels = await read<string[]>("allSeats");
-
-    const seats: Seat[] = await Promise.all(
-      labels.map(async (label) => {
-        const [tier, price, , tokenId] = await read<[number, bigint, boolean, bigint]>(
-          "seatListing",
-          [keccak256(toBytes(label))],
-        );
-        let owner: Address | undefined;
-        let used = false;
-        if (tokenId !== 0n) {
-          const [o, t] = await Promise.all([
-            read<Address>("ownerOf", [tokenId]),
-            read<{ usedAt: bigint }>("ticket", [tokenId]),
-          ]);
-          owner = o;
-          used = t.usedAt !== 0n;
-        }
-        return { label, tier, price, tokenId, owner, used };
-      }),
+    // One round for every listing, one more for sold-seat details. On testnet
+    // each round is a single Multicall3 eth_call; on anvil it's a JSON-RPC
+    // batch (no Multicall3 predeploy there, and no rate limit either).
+    const listings = await readAll<[number, bigint, boolean, bigint]>(
+      collection,
+      labels.map((label) => ["seatListing", [keccak256(toBytes(label))]]),
     );
+    const soldIdx = listings
+      .map((l, i) => (l[3] !== 0n ? i : -1))
+      .filter((i) => i >= 0);
+    const details = await readAll<unknown>(
+      collection,
+      soldIdx.flatMap((i) => [
+        ["ownerOf", [listings[i][3]]],
+        ["ticket", [listings[i][3]]],
+      ]),
+    );
+
+    const detailByIdx = new Map<number, { owner: Address; used: boolean }>();
+    soldIdx.forEach((seatIdx, k) => {
+      const owner = details[k * 2] as Address;
+      const t = details[k * 2 + 1] as { usedAt: bigint };
+      detailByIdx.set(seatIdx, { owner, used: t.usedAt !== 0n });
+    });
+
+    const seats: Seat[] = labels.map((label, i) => {
+      const [tier, price, , tokenId] = listings[i];
+      const d = detailByIdx.get(i);
+      return { label, tier, price, tokenId, owner: d?.owner, used: d?.used ?? false };
+    });
 
     return { ...statics, seats };
   } catch {
     return "rpc-down"; // unreachable, rate-limited, or not seeded
   }
+}
+
+/// Read many functions off one contract in a single round: Multicall3 where
+/// the chain has it (one eth_call total), otherwise a parallel batch.
+async function readAll<T>(
+  address: Address,
+  calls: [string, unknown[]][],
+): Promise<T[]> {
+  if (calls.length === 0) return [];
+  const contracts = calls.map(([functionName, args]) => ({
+    address,
+    abi: collectionAbi,
+    functionName,
+    args,
+  }));
+  if (PROFILE.chain.contracts?.multicall3) {
+    const results = await publicClient.multicall({
+      contracts: contracts as never,
+      allowFailure: false,
+    });
+    return results as T[];
+  }
+  return Promise.all(
+    contracts.map((c) => publicClient.readContract(c as never) as Promise<T>),
+  );
 }
