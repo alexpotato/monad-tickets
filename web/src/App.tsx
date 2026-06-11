@@ -34,7 +34,13 @@ function ProfileSwitch() {
 export default function App() {
   const [route, setRoute] = useState<Route>(routeFromHash());
   const [result] = usePoll(loadEventState, POLL_MS);
-  const state = typeof result === "object" ? result : undefined;
+  // Hold the last good state so a transient RPC failure (public testnet rate
+  // limiting) doesn't dump a working session back to the boot screen.
+  const [last, setLast] = useState<Extract<typeof result, object>>();
+  useEffect(() => {
+    if (typeof result === "object") setLast(result);
+  }, [result]);
+  const state = typeof result === "object" ? result : last;
 
   useEffect(() => {
     const onHash = () => setRoute(routeFromHash());
