@@ -28,6 +28,8 @@ export type ChainProfile = {
   factory: Address | null; // null = contracts not deployed yet
   faucet?: string;
   canAutoFund: boolean; // anvil_setBalance available
+  pollMs: number; // public RPCs rate-limit; poll gently there
+  fromBlock: bigint; // earliest block for log queries (factory deploy)
   roles: RoleKeys;
 };
 
@@ -47,6 +49,8 @@ export const PROFILES: Record<"local" | "testnet", ChainProfile> = {
     // Deterministic on a fresh anvil seeded with contracts/script/Demo.s.sol.
     factory: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
     canAutoFund: true,
+    pollMs: 2000,
+    fromBlock: 0n,
     roles: {
       // anvil's well-known dev accounts
       organizer: {
@@ -73,6 +77,8 @@ export const PROFILES: Record<"local" | "testnet", ChainProfile> = {
     factory: "0x592750D487B8862fEd7a7c072EE9c3882D8De440",
     faucet: "https://faucet.monad.xyz",
     canAutoFund: false,
+    pollMs: 8000,
+    fromBlock: 37600224n, // factory deploy block
     roles: {
       // Shared demo-role keys, testnet-only (committed intentionally, like
       // anvil's public dev keys — fund them per TESTNET.md).

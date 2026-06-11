@@ -3,6 +3,7 @@ import { formatEther } from "viem";
 import {
   PERSONAS,
   PROFILE,
+  POLL_MS,
   autoFundIfPossible,
   collectionAbi,
   loyaltyAbi,
@@ -49,7 +50,7 @@ export function Attendee({ state }: { state: EventState }) {
       }),
     ]);
     return { balance, score, stubCount };
-  });
+  }, POLL_MS);
 
   // Show gate results on the phone (success or rejection at the door).
   useEffect(
@@ -317,13 +318,13 @@ function Profile({
       address: state.stub,
       event: stubAbi[2],
       args: { to: address },
-      fromBlock: 0n,
+      fromBlock: PROFILE.fromBlock,
     });
     return logs.map((l) => ({
       stubId: l.args.stubId!,
       ticketId: l.args.ticketId!,
     }));
-  }, 3000);
+  }, POLL_MS);
 
   return (
     <div>

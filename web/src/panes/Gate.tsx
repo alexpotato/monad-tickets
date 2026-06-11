@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { keccak256, toBytes } from "viem";
-import { PERSONAS, collectionAbi, publicClient, walletFor, type EventState } from "../lib/chain";
+import { PERSONAS, POLL_MS, collectionAbi, publicClient, walletFor, type EventState } from "../lib/chain";
 import { onScan, announceResult, type ScanPayload } from "../lib/bus";
 import { usePoll } from "../lib/hooks";
 import { shortError } from "./Organizer";
@@ -106,7 +106,7 @@ export function Gate({ state }: { state: EventState }) {
       }),
     ]);
     return { setAt, validity, onChainHash };
-  });
+  }, POLL_MS);
 
   // The displayed plaintext is only trustworthy if its hash matches the chain
   // (a reset/reseed leaves a stale code in localStorage — show "rotate" then).

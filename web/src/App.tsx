@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Organizer } from "./panes/Organizer";
 import { Attendee } from "./panes/Attendee";
 import { Gate } from "./panes/Gate";
-import { loadEventState, PROFILE } from "./lib/chain";
+import { loadEventState, PROFILE, POLL_MS } from "./lib/chain";
 import { PROFILES, switchProfile } from "./lib/profiles";
 import { usePoll } from "./lib/hooks";
 
@@ -33,7 +33,8 @@ function ProfileSwitch() {
 
 export default function App() {
   const [route, setRoute] = useState<Route>(routeFromHash());
-  const [state] = usePoll(loadEventState);
+  const [result] = usePoll(loadEventState, POLL_MS);
+  const state = typeof result === "object" ? result : undefined;
 
   useEffect(() => {
     const onHash = () => setRoute(routeFromHash());
@@ -41,14 +42,21 @@ export default function App() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  if (state === undefined) {
+  if (result === undefined) {
     return <div className="boot">Connecting to {PROFILE.label}…</div>;
   }
-  if (state === null) {
+  if (state === undefined) {
     return (
       <div className="boot">
-        <h2>{PROFILE.label}: chain not ready</h2>
-        {PROFILE.id === "local" ? (
+        <h2>
+          {PROFILE.label}: {result === "no-factory" ? "not deployed" : "chain unreachable"}
+        </h2>
+        {result === "no-factory" ? (
+          <p>
+            The contracts aren't deployed on this chain yet — see TESTNET.md in the repo for
+            the deploy runbook.
+          </p>
+        ) : PROFILE.id === "local" ? (
           <>
             <p>Start the local chain and seed the demo:</p>
             <pre>
@@ -58,8 +66,8 @@ export default function App() {
           </>
         ) : (
           <p>
-            The contracts aren't deployed to Monad testnet yet — see TESTNET.md in the repo
-            for the deploy runbook.
+            Couldn't reach the {PROFILE.label} RPC (down or rate-limited). Retrying
+            automatically…
           </p>
         )}
         <p style={{ marginTop: 16 }}>

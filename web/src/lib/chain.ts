@@ -17,16 +17,20 @@ import { activeProfile, deviceWalletKey, type ChainProfile } from "./profiles";
 
 export const PROFILE: ChainProfile = activeProfile();
 
-export const publicClient = createPublicClient({
-  chain: PROFILE.chain,
-  transport: http(PROFILE.rpcUrl),
-});
+// batch: true folds concurrent reads into JSON-RPC batch requests — the
+// seat-map poll is ~100 calls, which public RPCs rate-limit as individual
+// requests but accept as a couple of batches.
+const transport = http(PROFILE.rpcUrl, { batch: true });
+
+export const publicClient = createPublicClient({ chain: PROFILE.chain, transport });
+
+export const POLL_MS = PROFILE.pollMs;
 
 export function walletFor(privateKey: Hex) {
   const account = privateKeyToAccount(privateKey);
   return {
     account,
-    client: createWalletClient({ account, chain: PROFILE.chain, transport: http(PROFILE.rpcUrl) }),
+    client: createWalletClient({ account, chain: PROFILE.chain, transport }),
   };
 }
 
@@ -174,8 +178,10 @@ export type EventState = {
 
 /// One polling read of everything the panes need. Demo-scale (tens of seats),
 /// so plain parallel eth_calls are fine.
-export async function loadEventState(): Promise<EventState | null> {
-  if (PROFILE.factory === null) return null; // not deployed on this chain yet
+export type LoadResult = EventState | "no-factory" | "rpc-down";
+
+export async function loadEventState(): Promise<LoadResult> {
+  if (PROFILE.factory === null) return "no-factory";
   try {
     const collection = await publicClient.readContract({
       address: PROFILE.factory,
@@ -224,6 +230,6 @@ export async function loadEventState(): Promise<EventState | null> {
 
     return { collection, name, organizer, loyalty, stub, eventStartTime, resaleCap, seats };
   } catch {
-    return null; // anvil not running / not seeded
+    return "rpc-down"; // unreachable, rate-limited, or not seeded
   }
 }
