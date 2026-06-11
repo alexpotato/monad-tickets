@@ -18,9 +18,30 @@ type LogEntry = { ok: boolean; text: string; at: string };
 /// Elect exactly one tab as the active gate device. The gate pane can be
 /// mounted in several tabs (the side-by-side demo view AND #/gate); without
 /// election they would all submit check-ins from the same account and race
-/// nonces. The Web Lock is held until the tab closes; the next tab takes over.
-function useGateLeader(): boolean {
+/// nonces. The Web Lock is held until the tab closes (or another tab steals
+/// it via takeover); returns [isLeader, takeover].
+function useGateLeader(): [boolean, () => void] {
   const [leader, setLeader] = useState(false);
+  const stateRef = useRef<{ cancelled: boolean; release?: () => void }>({ cancelled: false });
+
+  function acquire(steal: boolean) {
+    const s = stateRef.current;
+    navigator.locks
+      .request("tickets-gate-device", steal ? { steal: true } : {}, () => {
+        if (s.cancelled) return;
+        setLeader(true);
+        return new Promise<void>((resolve) => {
+          s.release = resolve;
+        });
+      })
+      // Resolves on voluntary release; rejects when another tab steals the
+      // lock — either way this tab is no longer the scanner.
+      .then(
+        () => !s.cancelled && setLeader(false),
+        () => !s.cancelled && setLeader(false),
+      );
+  }
+
   useEffect(() => {
     // Web Locks needs a secure context; localhost qualifies. Over plain LAN
     // IP it's absent — assume single-gate usage there.
@@ -28,29 +49,29 @@ function useGateLeader(): boolean {
       setLeader(true);
       return;
     }
-    let release: (() => void) | undefined;
-    let cancelled = false;
-    navigator.locks.request("tickets-gate-device", () => {
-      if (cancelled) return;
-      setLeader(true);
-      return new Promise<void>((resolve) => {
-        release = resolve;
-      });
-    });
+    const s = stateRef.current;
+    s.cancelled = false;
+    acquire(false);
     return () => {
-      cancelled = true;
+      s.cancelled = true;
       setLeader(false);
-      release?.();
+      s.release?.();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  return leader;
+
+  const takeover = () => {
+    if (!("locks" in navigator)) return;
+    acquire(true);
+  };
+  return [leader, takeover];
 }
 
 export function Gate({ state }: { state: EventState }) {
   const [code, setCode] = useState<string | null>(() => localStorage.getItem("gate-code"));
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState<LogEntry[]>([]);
-  const isLeader = useGateLeader();
+  const [isLeader, takeover] = useGateLeader();
 
   // Keep display-only tabs showing the code the leader most recently set.
   useEffect(() => {
@@ -165,8 +186,13 @@ export function Gate({ state }: { state: EventState }) {
   return (
     <div>
       {!isLeader && (
-        <div className="msg info">
-          Another tab is the active gate scanner — this screen is display-only.
+        <div className="msg info" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ flex: 1 }}>
+            Another tab is the active gate scanner — this screen is display-only.
+          </span>
+          <button className="ghost" onClick={takeover}>
+            Scan here instead
+          </button>
         </div>
       )}
       <div className="card gatecode">
