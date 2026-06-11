@@ -143,3 +143,40 @@ table.rostr { width: 100%; border-collapse: collapse; font-size: 13px; }
 .rostr td { padding: 9px 8px; border-bottom: 1px solid #1c2236; }
 .rostr td.neg { color: var(--bad); }
 .youtag { background: var(--accent); color: #fff; font-size: 10px; border-radius: 6px; padding: 1px 6px; margin-left: 6px; font-family: -apple-system, sans-serif; }
+
+/* presentation deck */
+.deck {
+  position: fixed; inset: 0; background:
+    radial-gradient(1200px 600px at 80% -10%, #2b2563 0%, transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, #1d3a2c 0%, transparent 55%),
+    var(--bg);
+  display: grid; place-items: center; z-index: 50; user-select: none;
+}
+.slide { max-width: 880px; width: 92vw; padding: 24px; }
+.slide section.center { text-align: center; }
+.slide .kicker { color: var(--warn); letter-spacing: 4px; font-size: 13px; font-weight: 700; margin-bottom: 18px; }
+.slide h1 { font-size: 64px; margin: 0 0 18px; }
+.slide h2 { font-size: 40px; margin: 0 0 26px; }
+.slide .big { font-size: 26px; line-height: 1.45; color: var(--text); margin: 10px 0; }
+.slide .big em { color: var(--accent); font-style: normal; }
+.slide .accent { color: var(--warn); }
+.slide ul, .slide ol { font-size: 22px; line-height: 1.7; padding-left: 28px; margin: 0; }
+.slide li { margin-bottom: 14px; }
+.slide strong { color: var(--accent); }
+.slide .sub2 { color: var(--muted); font-size: 15px; margin-top: 20px; }
+.slide .mono2 { font-family: ui-monospace, Menlo, monospace; color: var(--warn); }
+.deck-table { font-size: 17px; }
+.deck-table td, .deck-table th { padding: 12px 10px; }
+.deck-table td.mono { font-size: 14px; }
+.deck-click { position: absolute; top: 0; bottom: 60px; width: 50%; cursor: pointer; z-index: 51; }
+.deck-click.left { left: 0; } .deck-click.right { right: 0; }
+.deck-exit { position: absolute; top: 16px; right: 20px; color: var(--muted); text-decoration: none; font-size: 20px; z-index: 52; }
+.deck-dots { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; z-index: 52; }
+.deck-dots i { width: 9px; height: 9px; border-radius: 50%; background: #2b3352; cursor: pointer; }
+.deck-dots i.on { background: var(--accent); }
+.deck-pos { position: absolute; bottom: 20px; right: 24px; color: var(--muted); font-size: 13px; }
+@media (max-width: 700px) {
+  .slide h1 { font-size: 38px; } .slide h2 { font-size: 27px; }
+  .slide .big { font-size: 19px; } .slide ul, .slide ol { font-size: 16px; }
+  .deck-table { font-size: 12px; }
+}

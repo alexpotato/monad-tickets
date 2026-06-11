@@ -3,11 +3,12 @@ import { Organizer } from "./panes/Organizer";
 import { Attendee } from "./panes/Attendee";
 import { Gate } from "./panes/Gate";
 import { Company } from "./panes/Company";
+import { Presentation } from "./panes/Presentation";
 import { loadEventState, PROFILE, POLL_MS } from "./lib/chain";
 import { PROFILES, switchProfile } from "./lib/profiles";
 import { usePoll } from "./lib/hooks";
 
-type Route = "demo" | "organizer" | "attendee" | "gate" | "company";
+type Route = "demo" | "organizer" | "attendee" | "gate" | "company" | "presentation";
 
 // The default URL IS the wallet app. Operator surfaces live at their own
 // URLs: #/admin (organizer dashboard), #/gate (venue gate), #/demo (the
@@ -18,6 +19,7 @@ function routeFromHash(): Route {
   if (h === "gate") return "gate";
   if (h === "demo") return "demo";
   if (h === "company") return "company";
+  if (h === "presentation") return "presentation";
   return "attendee";
 }
 
@@ -52,6 +54,10 @@ export default function App() {
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
+
+  if (route === "presentation") {
+    return <Presentation state={state} />;
+  }
 
   if (result === undefined) {
     return <div className="boot">Connecting to {PROFILE.label}…</div>;
@@ -101,6 +107,7 @@ export default function App() {
               <a href="#/demo" className={route === "demo" ? "active" : ""}>Demo</a>
               <a href="#/admin" className={route === "organizer" ? "active" : ""}>Admin</a>
               <a href="#/company" className={route === "company" ? "active" : ""}>Company</a>
+            <a href="#/presentation">Slides</a>
               <a href="#/gate" className={route === "gate" ? "active" : ""}>Gate</a>
             </nav>
             <ProfileSwitch />
