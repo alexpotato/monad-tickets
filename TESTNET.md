@@ -56,6 +56,28 @@ against testnet automatically.
    `#/organizer` for the dashboard (shared demo roles, no setup), rotate the
    venue code, and run a real phone-to-gate check-in.
 
+## Funding phone wallets
+
+Each device that opens the PWA generates its own wallet (address shown in the
+app's faucet banner, tap to copy). Fund it with:
+
+```bash
+cd web
+npm run fund -- 0xPHONE_ADDRESS            # 2 MON default
+npm run fund -- 0xA... 0xB... --amount 5   # several at once
+```
+
+The script sends from the deployer/distributor wallet and automatically tops
+itself up from the team faucet when low. Faucet URL + credentials live in the
+repo-root `.env` (gitignored):
+
+```
+TESTNET_DEPLOYER_PK=0x...
+FAUCET_URL=.../faucet/request
+FAUCET_USER=...
+FAUCET_PASS=...
+```
+
 ## Notes
 
 - Attendee check-in stays free on testnet: the shared gate key submits and
