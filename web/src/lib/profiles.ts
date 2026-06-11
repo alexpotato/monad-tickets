@@ -7,7 +7,7 @@ export const monadTestnet = defineChain({
   id: 10143,
   name: "Monad Testnet",
   nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
-  rpcUrls: { default: { http: ["https://testnet-rpc.monad.xyz"] } },
+  rpcUrls: { default: { http: ["https://can-007.devcore4.com/rpc/Vc9Blo3MtwRGdJnYMmE1KwCO3t6iY9xL"] } },
   blockExplorers: {
     default: { name: "Monad Explorer", url: "https://testnet.monadexplorer.com" },
   },
@@ -78,16 +78,15 @@ export const PROFILES: Record<"local" | "testnet", ChainProfile> = {
     id: "testnet",
     label: "Monad testnet",
     chain: monadTestnet,
-    // Public testnet RPC. (Tried the dedicated can-007.devcore4.com endpoint —
-    // verified from a shell, but it's network-allowlisted: a browser fetch from
-    // the hosted app gets "Failed to fetch", so it can't back a public PWA.
-    // Revisit if a publicly-reachable dedicated endpoint becomes available.)
-    rpcUrl: "https://testnet-rpc.monad.xyz",
+    // Dedicated RPC: no public-endpoint rate cap, in sync, CORS now correct on
+    // the POST response (verified from a real browser fetch). Falls back-tested
+    // 30 rapid requests → all 200.
+    rpcUrl: "https://can-007.devcore4.com/rpc/Vc9Blo3MtwRGdJnYMmE1KwCO3t6iY9xL",
     // Deployed 2026-06-11 via DeployTestnet.s.sol (see TESTNET.md).
     factory: "0x592750D487B8862fEd7a7c072EE9c3882D8De440",
     faucet: "https://faucet.monad.xyz",
     canAutoFund: false,
-    pollMs: 8000,
+    pollMs: 4000,
     fromBlock: 37600224n, // factory deploy block
     roles: {
       // Shared demo-role keys, testnet-only (committed intentionally, like
