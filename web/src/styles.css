@@ -185,3 +185,12 @@ table.rostr { width: 100%; border-collapse: collapse; font-size: 13px; }
 .deck-qr { margin-top: 28px; display: inline-block; }
 .deck-qr img { background: #fff; padding: 10px; border-radius: 14px; display: block; }
 .deck-qr-label { color: var(--muted); font-size: 14px; margin-top: 10px; text-align: center; }
+
+/* deck two-column (security slide) */
+.twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin: 22px 0 4px; }
+.twocol h4 { font-size: 14px; letter-spacing: 0.8px; text-transform: uppercase; margin: 0 0 10px; }
+.twocol .col-bad { color: var(--bad); }
+.twocol .col-good { color: var(--good); }
+.twocol ul { font-size: 18px; line-height: 1.55; }
+.twocol li { margin-bottom: 10px; }
+@media (max-width: 700px) { .twocol { grid-template-columns: 1fr; gap: 16px; } .twocol ul { font-size: 15px; } }

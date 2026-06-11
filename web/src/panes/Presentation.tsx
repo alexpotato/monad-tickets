@@ -119,10 +119,43 @@ function buildSlides(state?: EventState) {
         <li>The gate submits and pays the gas — <strong>check-in is free for fans</strong>.</li>
         <li>Ticket → event wallet. Stub → fan. Loyalty +10. All in one transaction.</li>
       </ol>
-      <p className="sub2">Pseudonymous, yet cryptographically attributable. Wallet control + code knowledge + gate co-attestation.</p>
+      <p className="sub2">Pseudonymous, yet cryptographically attributable: wallet control + code knowledge + the gate's own submission.</p>
     </section>,
 
-    // 6 — the flywheel
+    // 6 — red team: can't I just fake it?
+    <section key="sec">
+      <h2>"Can't I just fake it?"</h2>
+      <p className="big">
+        Typing a code proves <em>knowledge</em>, not <em>location</em> — so we make faking
+        <span className="accent"> uneconomic, not impossible</span>, in layers.
+      </p>
+      <div className="twocol">
+        <div>
+          <h4 className="col-bad">The attacks</h4>
+          <ul>
+            <li>Relay the code to people who aren't there.</li>
+            <li>Pre-sign a check-in from home.</li>
+            <li>Spin up many wallets to farm reputation.</li>
+            <li>A corrupt gate vouches for no-shows.</li>
+          </ul>
+        </div>
+        <div>
+          <h4 className="col-good">The defenses</h4>
+          <ul>
+            <li>The gate is a <strong>witness, not a relay</strong> — a venue device co-signs each check-in live.</li>
+            <li>A <strong>fresh per-scan challenge</strong> makes pre-signed sigs stale.</li>
+            <li>Loyalty is <strong>capped, decays, and weights distinct venues</strong> — farmed stubs can't be banked.</li>
+            <li>The public <strong>company roster</strong> exposes buy-many / attend-never wallets to everyone.</li>
+          </ul>
+        </div>
+      </div>
+      <p className="sub2">
+        KYC-free by design: a determined human can still be slow and expensive about it —
+        never cheap, never invisible.
+      </p>
+    </section>,
+
+    // 7 — the flywheel
     <section key="f">
       <h2>The loyalty flywheel</h2>
       <ul>
@@ -136,7 +169,7 @@ function buildSlides(state?: EventState) {
       </ul>
     </section>,
 
-    // 7 — resale, civilized
+    // 8 — resale, civilized
     <section key="r">
       <h2>Resale, civilized — not banned</h2>
       <ul>
@@ -147,7 +180,7 @@ function buildSlides(state?: EventState) {
       </ul>
     </section>,
 
-    // 8 — live data
+    // 9 — live data
     <section key="l">
       <h2>The receipts — live from chain, right now</h2>
       <LiveRoster state={state} />
@@ -157,7 +190,7 @@ function buildSlides(state?: EventState) {
       </p>
     </section>,
 
-    // 9 — why monad
+    // 10 — why monad
     <section key="m">
       <h2>Why Monad</h2>
       <ul>
@@ -168,7 +201,7 @@ function buildSlides(state?: EventState) {
       </ul>
     </section>,
 
-    // 10 — try it
+    // 11 — try it
     <section key="x" className="center">
       <h2>Try it now</h2>
       <p className="big mono2">alexpotato.github.io/monad-tickets</p>
