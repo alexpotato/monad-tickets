@@ -46,8 +46,8 @@ contract Demo is Script {
         // --- sample event (created + seeded by the organizer) ---
         vm.startBroadcast(ORGANIZER_PK);
         EventFactory.EventParams memory p = EventFactory.EventParams({
-            name: "Monad Live: Block Party",
-            symbol: "BLOCK",
+            name: "Category Labs Hackathon",
+            symbol: "CLH",
             organizer: organizer,
             gate: gate,
             eventStartTime: uint64(block.timestamp + 7 days),

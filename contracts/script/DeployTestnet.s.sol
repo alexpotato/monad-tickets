@@ -48,8 +48,8 @@ contract DeployTestnet is Script {
         // --- demo event (shared organizer key; fund it first, see TESTNET.md) ---
         vm.startBroadcast(ORGANIZER_PK);
         EventFactory.EventParams memory p = EventFactory.EventParams({
-            name: "Monad Live: Block Party",
-            symbol: "BLOCK",
+            name: "Category Labs Hackathon",
+            symbol: "CLH",
             organizer: organizer,
             gate: GATE,
             eventStartTime: uint64(block.timestamp + 30 days),
