@@ -7,7 +7,9 @@ export const monadTestnet = defineChain({
   id: 10143,
   name: "Monad Testnet",
   nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
-  rpcUrls: { default: { http: ["https://testnet-rpc.monad.xyz"] } },
+  // Dedicated Monad testnet RPC (no 15/s public-endpoint cap, CORS-open to the
+  // Pages origin). Verified: chain 10143, in sync, factory reads correctly.
+  rpcUrls: { default: { http: ["https://can-007.devcore4.com/rpc/Vc9Blo3MtwRGdJnYMmE1KwCO3t6iY9xL"] } },
   blockExplorers: {
     default: { name: "Monad Explorer", url: "https://testnet.monadexplorer.com" },
   },
@@ -78,12 +80,13 @@ export const PROFILES: Record<"local" | "testnet", ChainProfile> = {
     id: "testnet",
     label: "Monad testnet",
     chain: monadTestnet,
-    rpcUrl: "https://testnet-rpc.monad.xyz",
+    // Dedicated RPC: no 15/s public-endpoint cap, CORS-open to the Pages origin.
+    rpcUrl: "https://can-007.devcore4.com/rpc/Vc9Blo3MtwRGdJnYMmE1KwCO3t6iY9xL",
     // Deployed 2026-06-11 via DeployTestnet.s.sol (see TESTNET.md).
     factory: "0x592750D487B8862fEd7a7c072EE9c3882D8De440",
     faucet: "https://faucet.monad.xyz",
     canAutoFund: false,
-    pollMs: 8000,
+    pollMs: 4000,
     fromBlock: 37600224n, // factory deploy block
     roles: {
       // Shared demo-role keys, testnet-only (committed intentionally, like
