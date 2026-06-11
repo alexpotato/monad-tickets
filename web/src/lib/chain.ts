@@ -20,7 +20,7 @@ export const PROFILE: ChainProfile = activeProfile();
 // batch: true folds concurrent reads into JSON-RPC batch requests — the
 // seat-map poll is ~100 calls, which public RPCs rate-limit as individual
 // requests but accept as a couple of batches.
-const transport = http(PROFILE.rpcUrl, { batch: true });
+const transport = http(PROFILE.rpcUrl, { batch: { wait: 100 } });
 
 export const publicClient = createPublicClient({ chain: PROFILE.chain, transport });
 
@@ -180,15 +180,39 @@ export type EventState = {
 /// so plain parallel eth_calls are fine.
 export type LoadResult = EventState | "no-factory" | "rpc-down";
 
+// The collection address and event config are immutable — fetch once and
+// reuse so the steady-state poll is ~2 HTTP requests. The public testnet RPC
+// has a tight per-IP burst limit (~4 rapid requests trips a 429).
+type Statics = Omit<EventState, "seats">;
+let statics: Statics | null = null;
+
 export async function loadEventState(): Promise<LoadResult> {
   if (PROFILE.factory === null) return "no-factory";
   try {
-    const collection = await publicClient.readContract({
-      address: PROFILE.factory,
-      abi: factoryAbi,
-      functionName: "events",
-      args: [0n],
-    });
+    if (!statics) {
+      const collection = await publicClient.readContract({
+        address: PROFILE.factory,
+        abi: factoryAbi,
+        functionName: "events",
+        args: [0n],
+      });
+      const readC = <T,>(functionName: string) =>
+        publicClient.readContract({
+          address: collection,
+          abi: collectionAbi,
+          functionName,
+        } as never) as Promise<T>;
+      const [name, organizer, loyalty, stub, eventStartTime, resaleCap] = await Promise.all([
+        readC<string>("name"),
+        readC<Address>("organizer"),
+        readC<Address>("loyalty"),
+        readC<Address>("stub"),
+        readC<bigint>("eventStartTime"),
+        readC<bigint>("resaleCap"),
+      ]);
+      statics = { collection, name, organizer, loyalty, stub, eventStartTime, resaleCap };
+    }
+    const collection = statics.collection;
     const read = <T,>(functionName: string, args: unknown[] = []) =>
       publicClient.readContract({
         address: collection,
@@ -197,16 +221,7 @@ export async function loadEventState(): Promise<LoadResult> {
         args,
       } as never) as Promise<T>;
 
-    const [name, organizer, loyalty, stub, eventStartTime, resaleCap, labels] =
-      await Promise.all([
-        read<string>("name"),
-        read<Address>("organizer"),
-        read<Address>("loyalty"),
-        read<Address>("stub"),
-        read<bigint>("eventStartTime"),
-        read<bigint>("resaleCap"),
-        read<string[]>("allSeats"),
-      ]);
+    const labels = await read<string[]>("allSeats");
 
     const seats: Seat[] = await Promise.all(
       labels.map(async (label) => {
@@ -228,7 +243,7 @@ export async function loadEventState(): Promise<LoadResult> {
       }),
     );
 
-    return { collection, name, organizer, loyalty, stub, eventStartTime, resaleCap, seats };
+    return { ...statics, seats };
   } catch {
     return "rpc-down"; // unreachable, rate-limited, or not seeded
   }
