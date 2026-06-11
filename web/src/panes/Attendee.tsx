@@ -179,11 +179,17 @@ export function Attendee({ state, refresh }: { state: EventState; refresh: () =>
       <div className="notch" />
       <div className="screen">
         <div className="persona">
-          <select value={personaIdx} onChange={(e) => setPersonaIdx(Number(e.target.value))}>
-            {PERSONAS.attendees.map((p, i) => (
-              <option key={p.name} value={i}>{p.name}</option>
-            ))}
-          </select>
+          {PERSONAS.attendees.length > 1 ? (
+            // Multiple demo personas only exist on local anvil; a real phone
+            // just IS its wallet — no dropdown to confuse the consumer view.
+            <select value={personaIdx} onChange={(e) => setPersonaIdx(Number(e.target.value))}>
+              {PERSONAS.attendees.map((p, i) => (
+                <option key={p.name} value={i}>{p.name}</option>
+              ))}
+            </select>
+          ) : (
+            <span style={{ flex: 1, fontWeight: 600 }}>🎫 My wallet</span>
+          )}
           <span className="balance">
             {profile ? `${Number(formatEther(profile.balance)).toFixed(2)} MON` : "…"}
           </span>

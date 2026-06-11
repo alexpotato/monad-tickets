@@ -96,14 +96,16 @@ export default function App() {
       <header className="topbar">
         <span className="brand">⛓ Monad Tickets</span>
         {isOperator && (
-          <nav>
-            <a href="#/demo" className={route === "demo" ? "active" : ""}>Demo</a>
-            <a href="#/admin" className={route === "organizer" ? "active" : ""}>Admin</a>
-            <a href="#/company" className={route === "company" ? "active" : ""}>Company</a>
-            <a href="#/gate" className={route === "gate" ? "active" : ""}>Gate</a>
-          </nav>
+          <>
+            <nav>
+              <a href="#/demo" className={route === "demo" ? "active" : ""}>Demo</a>
+              <a href="#/admin" className={route === "organizer" ? "active" : ""}>Admin</a>
+              <a href="#/company" className={route === "company" ? "active" : ""}>Company</a>
+              <a href="#/gate" className={route === "gate" ? "active" : ""}>Gate</a>
+            </nav>
+            <ProfileSwitch />
+          </>
         )}
-        <ProfileSwitch />
       </header>
       {route === "demo" && (
         <div className="threepane">
