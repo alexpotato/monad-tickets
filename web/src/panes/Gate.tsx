@@ -73,16 +73,26 @@ export function Gate({ state }: { state: EventState }) {
   }
 
   const [codeInfo] = usePoll(async () => {
-    const [setAt, validity] = await Promise.all([
+    const [setAt, validity, onChainHash] = await Promise.all([
       publicClient.readContract({
         address: state.collection, abi: collectionAbi, functionName: "codeSetAt",
       }),
       publicClient.readContract({
         address: state.collection, abi: collectionAbi, functionName: "codeValidity",
       }),
+      publicClient.readContract({
+        address: state.collection, abi: collectionAbi, functionName: "currentCodeHash",
+      }),
     ]);
-    return { setAt, validity };
+    return { setAt, validity, onChainHash };
   });
+
+  // The displayed plaintext is only trustworthy if its hash matches the chain
+  // (a reset/reseed leaves a stale code in localStorage — show "rotate" then).
+  const codeLive =
+    code !== null &&
+    codeInfo !== undefined &&
+    keccak256(toBytes(code)) === codeInfo.onChainHash;
 
   function addLog(ok: boolean, text: string) {
     setLog((l) => [{ ok, text, at: new Date().toLocaleTimeString() }, ...l].slice(0, 30));
@@ -161,10 +171,10 @@ export function Gate({ state }: { state: EventState }) {
       )}
       <div className="card gatecode">
         <p className="sub">VENUE SCREENS — TYPE THIS CODE IN YOUR APP</p>
-        <div className="code">{code ?? "— — — —"}</div>
+        <div className="code">{codeLive ? code : "— — — —"}</div>
         <div className="ttl">
-          {code === null
-            ? "No code yet — rotate to start admitting"
+          {!codeLive
+            ? "No active code on-chain — rotate to start admitting"
             : remaining !== null
               ? remaining > 0
                 ? `expires in ${Math.floor(remaining / 60)}m ${remaining % 60}s`

@@ -110,8 +110,22 @@ export function Organizer({ state }: { state: EventState }) {
   );
 }
 
+const FRIENDLY_ERRORS: Record<string, string> = {
+  BadGateCode: "venue code is wrong or expired — check the screens and retype it",
+  TicketUsed: "ticket was already checked in",
+  SeatUnavailable: "seat is no longer available",
+  WrongPayment: "payment doesn't match the total",
+  TransferRestricted: "tickets only move through the official market",
+  PriceAboveCap: "price exceeds the resale cap",
+  "bad holder signature": "signature doesn't match the ticket holder (wrong code typed?)",
+  "mixed holders": "all tickets in one pass must belong to the same wallet",
+};
+
 export function shortError(e: unknown): string {
   const s = String((e as Error)?.message ?? e);
+  for (const [needle, friendly] of Object.entries(FRIENDLY_ERRORS)) {
+    if (s.includes(needle)) return friendly;
+  }
   const m = s.match(/reverted with the following reason:\s*\n?(.*?)(\n|$)/) ?? s.match(/Error: (\w+\(\))/);
   return m ? m[1] : s.slice(0, 140);
 }

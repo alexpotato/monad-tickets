@@ -69,7 +69,15 @@ export const collectionAbi = parseAbi([
   "function checkInBatch(uint256[], string, bytes)",
   "function codeValidity() view returns (uint64)",
   "function codeSetAt() view returns (uint64)",
+  "function currentCodeHash() view returns (bytes32)",
   "function listSeats(string[], uint16, uint256)",
+  // declared so viem decodes reverts into readable names
+  "error BadGateCode()",
+  "error TicketUsed()",
+  "error TransferRestricted()",
+  "error SeatUnavailable()",
+  "error WrongPayment()",
+  "error PriceAboveCap()",
 ]);
 
 export const loyaltyAbi = parseAbi([
