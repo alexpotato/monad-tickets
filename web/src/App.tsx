@@ -6,14 +6,17 @@ import { loadEventState, PROFILE, POLL_MS } from "./lib/chain";
 import { PROFILES, switchProfile } from "./lib/profiles";
 import { usePoll } from "./lib/hooks";
 
-type Route = "all" | "organizer" | "attendee" | "gate";
+type Route = "demo" | "organizer" | "attendee" | "gate";
 
+// The default URL IS the wallet app. Operator surfaces live at their own
+// URLs: #/admin (organizer dashboard), #/gate (venue gate), #/demo (the
+// three-pane control room).
 function routeFromHash(): Route {
   const h = window.location.hash.replace("#/", "");
-  if (h === "organizer" || h === "attendee" || h === "gate") return h;
-  // On a phone (or installed PWA) the attendee experience IS the app;
-  // the side-by-side control room only makes sense on a big screen.
-  return window.matchMedia("(max-width: 800px)").matches ? "attendee" : "all";
+  if (h === "admin" || h === "organizer") return "organizer";
+  if (h === "gate") return "gate";
+  if (h === "demo") return "demo";
+  return "attendee";
 }
 
 function ProfileSwitch() {
@@ -83,19 +86,23 @@ export default function App() {
     );
   }
 
+  // The wallet app keeps a minimal header; operator pages get the full nav.
+  const isOperator = route !== "attendee";
+
   return (
     <div className="app">
       <header className="topbar">
         <span className="brand">⛓ Monad Tickets</span>
-        <nav>
-          <a href="#/" className={route === "all" ? "active" : ""}>Demo</a>
-          <a href="#/organizer" className={route === "organizer" ? "active" : ""}>Organizer</a>
-          <a href="#/attendee" className={route === "attendee" ? "active" : ""}>Attendee</a>
-          <a href="#/gate" className={route === "gate" ? "active" : ""}>Gate</a>
-        </nav>
+        {isOperator && (
+          <nav>
+            <a href="#/demo" className={route === "demo" ? "active" : ""}>Demo</a>
+            <a href="#/admin" className={route === "organizer" ? "active" : ""}>Admin</a>
+            <a href="#/gate" className={route === "gate" ? "active" : ""}>Gate</a>
+          </nav>
+        )}
         <ProfileSwitch />
       </header>
-      {route === "all" && (
+      {route === "demo" && (
         <div className="threepane">
           <section><h3 className="panetitle">Organizer dashboard</h3><Organizer state={state} refresh={refresh} /></section>
           <section><h3 className="panetitle">Attendee phone</h3><Attendee state={state} refresh={refresh} /></section>

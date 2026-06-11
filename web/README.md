@@ -26,10 +26,10 @@ npm install
 npm run dev     # open http://localhost:5173
 ```
 
-The default view shows all three surfaces side by side. Individual routes —
-`#/organizer`, `#/attendee`, `#/gate` — render one surface full-page; the dev
-server binds to the network (`--host`), so you can open the attendee view on a
-real phone at `http://<your-ip>:5173/#/attendee`.
+The default URL is the wallet app (attendee). Operator surfaces have their
+own URLs: `#/admin` (organizer dashboard), `#/gate` (venue gate), and `#/demo`
+(all three side by side). The dev server binds to the network (`--host`), so a
+phone on the same LAN can open `http://<your-ip>:5173`.
 
 ## Demo walkthrough
 
