@@ -10,6 +10,12 @@ script verified on anvil — plus a **demo web app under `web/`** (Vite + React 
 viem) with three surfaces: organizer dashboard (list seats, watch sales and
 check-ins), attendee phone simulator (buy seats, hold tickets, check in), and
 venue gate (rotating code + scanner). See `web/README.md` for the run book.
+The web app is an installable PWA hosted at
+https://alexpotato.github.io/monad-tickets/ (GitHub Pages, repo
+alexpotato/monad-tickets, deployed by .github/workflows/pages.yml). Chain
+profiles: local anvil + Monad testnet (10143); testnet contracts deploy via
+TESTNET.md runbook, then paste the factory address into
+web/src/lib/profiles.ts.
 
 ```
 contracts/

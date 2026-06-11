@@ -1,4 +1,9 @@
-# Monad Tickets — Demo Web App
+# Monad Tickets — Demo Web App / PWA
+
+**Hosted PWA:** https://alexpotato.github.io/monad-tickets/ — open on a phone and
+"Add to Home Screen" to install. Defaults to the Monad testnet profile (see
+[TESTNET.md](../TESTNET.md) for the deploy runbook) with an in-app switcher
+for local anvil.
 
 Three-surface simulator for the on-chain ticketing system: an **organizer
 dashboard** (list seats, watch sales/check-ins), an **attendee phone simulator**
