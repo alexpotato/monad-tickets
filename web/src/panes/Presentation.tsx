@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import QRCode from "qrcode";
 import { type Address } from "viem";
 import {
   POLL_MS,
@@ -65,6 +66,7 @@ function buildSlides(state?: EventState) {
         Ticketing that knows the difference between a <em>fan</em> and a <em>flipper</em> —
         because attendance lives on-chain.
       </p>
+      <AppQR />
     </section>,
 
     // 2 — the problem
@@ -177,6 +179,27 @@ function buildSlides(state?: EventState) {
       <p className="sub2">github.com/alexpotato/monad-tickets — contracts, PWA, and every test</p>
     </section>,
   ];
+}
+
+/// QR straight to the wallet app, encoding wherever this deck is served from
+/// (the hosted URL on Pages, the LAN IP in dev) so a scan always lands right.
+function AppQR() {
+  const [src, setSrc] = useState<string>();
+  useEffect(() => {
+    const appUrl = `${window.location.origin}${window.location.pathname}`;
+    QRCode.toDataURL(appUrl, {
+      width: 220,
+      margin: 1,
+      color: { dark: "#0c0e14", light: "#ffffff" },
+    }).then(setSrc);
+  }, []);
+  if (!src) return null;
+  return (
+    <div className="deck-qr">
+      <img src={src} alt="QR code to open the app" width={180} height={180} />
+      <div className="deck-qr-label">📱 Scan to open the app</div>
+    </div>
+  );
 }
 
 function LiveRoster({ state }: { state?: EventState }) {

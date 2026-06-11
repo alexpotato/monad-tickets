@@ -180,3 +180,8 @@ table.rostr { width: 100%; border-collapse: collapse; font-size: 13px; }
   .slide .big { font-size: 19px; } .slide ul, .slide ol { font-size: 16px; }
   .deck-table { font-size: 12px; }
 }
+
+/* deck QR */
+.deck-qr { margin-top: 28px; display: inline-block; }
+.deck-qr img { background: #fff; padding: 10px; border-radius: 14px; display: block; }
+.deck-qr-label { color: var(--muted); font-size: 14px; margin-top: 10px; text-align: center; }
