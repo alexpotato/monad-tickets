@@ -69,8 +69,8 @@ export const PROFILES: Record<"local" | "testnet", ChainProfile> = {
     label: "Monad testnet",
     chain: monadTestnet,
     rpcUrl: "https://testnet-rpc.monad.xyz",
-    // Set after the testnet deploy (see TESTNET.md), then rebuild/redeploy.
-    factory: null,
+    // Deployed 2026-06-11 via DeployTestnet.s.sol (see TESTNET.md).
+    factory: "0x592750D487B8862fEd7a7c072EE9c3882D8De440",
     faucet: "https://faucet.monad.xyz",
     canAutoFund: false,
     roles: {
