@@ -82,12 +82,13 @@ export const PROFILES: Record<"local" | "testnet", ChainProfile> = {
     // the POST response (verified from a real browser fetch). Falls back-tested
     // 30 rapid requests → all 200.
     rpcUrl: "https://can-007.devcore4.com/rpc/Vc9Blo3MtwRGdJnYMmE1KwCO3t6iY9xL",
-    // Deployed 2026-06-11 via DeployTestnet.s.sol (see TESTNET.md).
-    factory: "0x592750D487B8862fEd7a7c072EE9c3882D8De440",
+    // Fresh deploy 2026-06-11 via DeployTestnet.s.sol — blank slate for the
+    // presentation (new factory/collection/loyalty/stub; empty roster).
+    factory: "0xDC845B01dc88F2B1CF4A7D0a35A113fb7b76bF7c",
     faucet: "https://faucet.monad.xyz",
     canAutoFund: false,
     pollMs: 4000,
-    fromBlock: 37600224n, // factory deploy block
+    fromBlock: 37660570n, // factory deploy block (fresh stack)
     roles: {
       // Shared demo-role keys, testnet-only (committed intentionally, like
       // anvil's public dev keys — fund them per TESTNET.md).
