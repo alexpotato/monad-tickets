@@ -1,0 +1,13 @@
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, defineChain } from "viem";
+import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
+const RPC="https://can-007.devcore4.com/rpc/Vc9Blo3MtwRGdJnYMmE1KwCO3t6iY9xL";
+const chain=defineChain({id:10143,name:"Monad",nativeCurrency:{name:"MON",symbol:"MON",decimals:18},rpcUrls:{default:{http:[RPC]}}});
+const pub=createPublicClient({chain,transport:http(RPC)});
+const sponsor=createWalletClient({account:privateKeyToAccount("0x8621db44fe63c1e243c07da91197e5a5270b6d4359a8aa65c7c68bbd5c2ad8bc"),chain,transport:http(RPC)});
+const buyer=privateKeyToAccount(generatePrivateKey());
+console.log("buyer:", buyer.address);
+const h = await sponsor.sendTransaction({ to: buyer.address, value: parseEther("1") });
+console.log("fund tx:", h);
+const r = await pub.waitForTransactionReceipt({ hash: h });
+console.log("fund receipt status:", r.status);
+console.log("buyer balance after:", formatEther(await pub.getBalance({ address: buyer.address })), "MON");

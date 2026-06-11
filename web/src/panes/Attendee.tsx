@@ -6,6 +6,7 @@ import {
   POLL_MS,
   autoFundIfPossible,
   collectionAbi,
+  GAS,
   loadStubs,
   loyaltyAbi,
   stubAbi,
@@ -88,6 +89,7 @@ export function Attendee({ state, refresh }: { state: EventState; refresh: () =>
       const hash = await sponsorClient.sendTransaction({
         to: account.address,
         value: parseEther("2"),
+        gas: GAS.transfer,
       });
       await publicClient.waitForTransactionReceipt({ hash });
       refresh();
@@ -124,6 +126,7 @@ export function Attendee({ state, refresh }: { state: EventState; refresh: () =>
         functionName: "buySeats",
         args: [labels],
         value: cartTotal,
+        gas: GAS.buySeats,
       });
       await publicClient.waitForTransactionReceipt({ hash });
       refresh(); // mined — pull the new tickets into view right away

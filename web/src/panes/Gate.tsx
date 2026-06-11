@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { keccak256, toBytes } from "viem";
-import { PERSONAS, POLL_MS, collectionAbi, publicClient, walletFor, type EventState } from "../lib/chain";
+import { PERSONAS, POLL_MS, GAS, collectionAbi, publicClient, walletFor, type EventState } from "../lib/chain";
 import { onScan, announceResult, type ScanPayload } from "../lib/bus";
 import { usePoll } from "../lib/hooks";
 import { shortError } from "./Organizer";
@@ -132,6 +132,7 @@ export function Gate({ state, refresh }: { state: EventState; refresh: () => voi
           abi: collectionAbi,
           functionName: "setGateCode",
           args: [keccak256(toBytes(next))],
+          gas: GAS.setGateCode,
         });
         await publicClient.waitForTransactionReceipt({ hash });
       });
@@ -161,6 +162,7 @@ export function Gate({ state, refresh }: { state: EventState; refresh: () => voi
             abi: collectionAbi,
             functionName: "checkInBatch",
             args: [p.tokenIds.map(BigInt), p.code, p.sig as `0x${string}`],
+            gas: GAS.checkInBatch,
           });
           await publicClient.waitForTransactionReceipt({ hash });
         });

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { formatEther, parseEther } from "viem";
-import { collectionAbi, publicClient, walletFor, PERSONAS, type EventState } from "../lib/chain";
+import { collectionAbi, GAS, publicClient, walletFor, PERSONAS, type EventState } from "../lib/chain";
 
 export function Organizer({ state, refresh }: { state: EventState; refresh: () => void }) {
   const [row, setRow] = useState("F");
@@ -25,6 +25,7 @@ export function Organizer({ state, refresh }: { state: EventState; refresh: () =
         abi: collectionAbi,
         functionName: "listSeats",
         args: [labels, tier, parseEther(price)],
+        gas: GAS.listSeats,
       });
       await publicClient.waitForTransactionReceipt({ hash });
       refresh();

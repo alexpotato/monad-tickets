@@ -81,6 +81,22 @@ export const publicClient = createPublicClient({
 
 export const POLL_MS = PROFILE.pollMs;
 
+// Explicit gas limits per write, so viem SKIPS eth_estimateGas. Monad's RPC
+// estimates against a huge block gas limit × gas price and rejects the call
+// with "insufficient balance" even when the wallet can easily afford the
+// actual cost — which silently broke buying and check-in. Generous fixed
+// limits (measured: buySeat ~318k, checkIn ~250k, checkInBatch scales) sidestep
+// estimation entirely. Anvil ignores these comfortably.
+export const GAS = {
+  buySeat: 400_000n,
+  buySeats: 1_200_000n, // ~per-seat; covers a cart of several
+  checkIn: 500_000n,
+  checkInBatch: 1_500_000n,
+  setGateCode: 120_000n,
+  listSeats: 800_000n,
+  transfer: 30_000n, // plain MON send (sponsor funding)
+} as const;
+
 export function walletFor(privateKey: Hex) {
   const account = privateKeyToAccount(privateKey);
   return {
