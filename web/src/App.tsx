@@ -33,7 +33,7 @@ function ProfileSwitch() {
 
 export default function App() {
   const [route, setRoute] = useState<Route>(routeFromHash());
-  const [result] = usePoll(loadEventState, POLL_MS);
+  const [result, refresh] = usePoll(loadEventState, POLL_MS);
   // Hold the last good state so a transient RPC failure (public testnet rate
   // limiting) doesn't dump a working session back to the boot screen.
   const [last, setLast] = useState<Extract<typeof result, object>>();
@@ -97,14 +97,14 @@ export default function App() {
       </header>
       {route === "all" && (
         <div className="threepane">
-          <section><h3 className="panetitle">Organizer dashboard</h3><Organizer state={state} /></section>
-          <section><h3 className="panetitle">Attendee phone</h3><Attendee state={state} /></section>
-          <section><h3 className="panetitle">Venue gate</h3><Gate state={state} /></section>
+          <section><h3 className="panetitle">Organizer dashboard</h3><Organizer state={state} refresh={refresh} /></section>
+          <section><h3 className="panetitle">Attendee phone</h3><Attendee state={state} refresh={refresh} /></section>
+          <section><h3 className="panetitle">Venue gate</h3><Gate state={state} refresh={refresh} /></section>
         </div>
       )}
-      {route === "organizer" && <div className="single"><Organizer state={state} /></div>}
-      {route === "attendee" && <div className="single"><Attendee state={state} /></div>}
-      {route === "gate" && <div className="single"><Gate state={state} /></div>}
+      {route === "organizer" && <div className="single"><Organizer state={state} refresh={refresh} /></div>}
+      {route === "attendee" && <div className="single"><Attendee state={state} refresh={refresh} /></div>}
+      {route === "gate" && <div className="single"><Gate state={state} refresh={refresh} /></div>}
     </div>
   );
 }

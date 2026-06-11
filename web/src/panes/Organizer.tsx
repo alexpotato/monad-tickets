@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { formatEther, parseEther } from "viem";
-import { collectionAbi, walletFor, PERSONAS, type EventState } from "../lib/chain";
+import { collectionAbi, publicClient, walletFor, PERSONAS, type EventState } from "../lib/chain";
 
-export function Organizer({ state }: { state: EventState }) {
+export function Organizer({ state, refresh }: { state: EventState; refresh: () => void }) {
   const [row, setRow] = useState("F");
   const [count, setCount] = useState(6);
   const [tier, setTier] = useState(1);
@@ -20,12 +20,14 @@ export function Organizer({ state }: { state: EventState }) {
     try {
       const labels = Array.from({ length: count }, (_, i) => `${row}-${i + 1}`);
       const { client } = walletFor(PERSONAS.organizer.key);
-      await client.writeContract({
+      const hash = await client.writeContract({
         address: state.collection,
         abi: collectionAbi,
         functionName: "listSeats",
         args: [labels, tier, parseEther(price)],
       });
+      await publicClient.waitForTransactionReceipt({ hash });
+      refresh();
       setMsg({ kind: "ok", text: `Listed ${count} seats in row ${row} at ${price} MON` });
     } catch (e) {
       setMsg({ kind: "err", text: shortError(e) });

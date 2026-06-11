@@ -67,7 +67,7 @@ function useGateLeader(): [boolean, () => void] {
   return [leader, takeover];
 }
 
-export function Gate({ state }: { state: EventState }) {
+export function Gate({ state, refresh }: { state: EventState; refresh: () => void }) {
   const [code, setCode] = useState<string | null>(() => localStorage.getItem("gate-code"));
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState<LogEntry[]>([]);
@@ -160,6 +160,7 @@ export function Gate({ state }: { state: EventState }) {
           });
           await publicClient.waitForTransactionReceipt({ hash });
         });
+        refresh(); // flip the seats to checked-in on every pane immediately
         addLog(true, `✓ Welcome! ${p.seats} checked in — tickets returned to event wallet, stubs minted.`);
         announceResult({
           tokenIds: p.tokenIds,

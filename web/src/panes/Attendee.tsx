@@ -19,7 +19,7 @@ import { shortError } from "./Organizer";
 
 type Tab = "seats" | "tickets" | "profile";
 
-export function Attendee({ state }: { state: EventState }) {
+export function Attendee({ state, refresh }: { state: EventState; refresh: () => void }) {
   const [personaIdx, setPersonaIdx] = useState(0);
   const [tab, setTab] = useState<Tab>("seats");
   const persona = PERSONAS.attendees[personaIdx];
@@ -54,7 +54,12 @@ export function Attendee({ state }: { state: EventState }) {
 
   // Show gate results on the phone (success or rejection at the door).
   useEffect(
-    () => onResult((r) => setMsg({ kind: r.ok ? "ok" : "err", text: r.message })),
+    () =>
+      onResult((r) => {
+        setMsg({ kind: r.ok ? "ok" : "err", text: r.message });
+        refresh(); // gate settled on-chain — show the outcome immediately
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
@@ -84,6 +89,7 @@ export function Attendee({ state }: { state: EventState }) {
         value: parseEther("2"),
       });
       await publicClient.waitForTransactionReceipt({ hash });
+      refresh();
       setMsg({ kind: "ok", text: "2 MON sent by the demo sponsor — happy seat shopping!" });
     } catch (e) {
       setMsg({ kind: "err", text: `Sponsor transfer failed: ${shortError(e)}` });
@@ -111,13 +117,15 @@ export function Attendee({ state }: { state: EventState }) {
     setMsg(null);
     try {
       const labels = cartSeats.map((s) => s.label);
-      await client.writeContract({
+      const hash = await client.writeContract({
         address: state.collection,
         abi: collectionAbi,
         functionName: "buySeats",
         args: [labels],
         value: cartTotal,
       });
+      await publicClient.waitForTransactionReceipt({ hash });
+      refresh(); // mined — pull the new tickets into view right away
       setMsg({
         kind: "ok",
         text: `${labels.length} seat${labels.length > 1 ? "s" : ""} minted: ${labels.join(", ")}`,
